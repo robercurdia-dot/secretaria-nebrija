@@ -1,0 +1,17 @@
+{
+  "name": "Secretaría Nebrija",
+  "short_name": "Secretaría",
+  "description": "Censo, plano, certificados y pasar lista del Colegio Mayor Antonio de Nebrija.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#A81C24",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

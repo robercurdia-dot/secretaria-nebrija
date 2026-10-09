@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<script>try{var _t=localStorage.getItem("nebrija-tema"); if(_t==="dark"||_t==="light") document.documentElement.setAttribute("data-theme",_t);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Secretaría Nebrija</title>
+<meta name="description" content="Herramienta interna de secretaría: censo, plano, certificados, pasar lista y más.">
+<meta name="theme-color" content="#A81C24">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Secretaría">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="btn-menu" type="button" aria-label="Abrir el menú" aria-controls="rail"><svg viewBox="0 0 20 20" width="22" height="22"><path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg></button>
+  <img src="img/escudo.png" alt="" width="28" height="28">
+  <div class="tt" id="topbar-t">Resumen</div>
+  <span class="sync-pt" id="topbar-sync" title="Estado de la sincronización" hidden></span>
+</header>
+
+<div class="app">
+  <nav class="rail" id="rail">
+    <div class="marca">
+      <img src="img/escudo.png" alt="">
+      <div>
+        <div class="t">Secretaría</div>
+        <div class="s">CMU Nebrija</div>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Inicio</div>
+      <button class="nav" data-v="resumen" aria-current="true"><svg viewBox="0 0 20 20"><path d="M3 10.5L10 4l7 6.5M5 9v7h10V9"/></svg>Resumen</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Asistencia</div>
+      <button class="nav" data-v="lista"><svg viewBox="0 0 20 20"><path d="M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5 2.5-2.5M11 6h6M11 11.5h6M11 17h6"/></svg>Pasar lista</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Censo</div>
+      <button class="nav" data-v="censo"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h9"/></svg>Listado de colegiales</button>
+      <button class="nav" data-v="unificar"><svg viewBox="0 0 20 20"><path d="M4 6h5l2 4H4zM16 14h-5l-2-4h7"/></svg>Unificar listados</button>
+      <button class="nav" data-v="validar"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg>Validación de datos</button>
+      <button class="nav" data-v="habitaciones"><svg viewBox="0 0 20 20"><path d="M3 17V6l7-3 7 3v11M8 17v-5h4v5"/></svg>Habitaciones</button>
+      <button class="nav" data-v="plano"><svg viewBox="0 0 20 20"><path d="M3 4h6v5H3zM11 4h6v5h-6zM3 11h6v5H3zM11 11h6v5h-6z"/></svg>Plano del Colegio</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Documentos</div>
+      <button class="nav" data-v="certificados"><svg viewBox="0 0 20 20"><path d="M5 3h10v14l-5-3-5 3zM8 8h4"/></svg>Certificados</button>
+      <button class="nav" data-v="carteles"><svg viewBox="0 0 20 20"><path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h2v2h-2zM15 15h1"/></svg>Carteles con QR</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Participación</div>
+      <button class="nav" data-v="puntos"><svg viewBox="0 0 20 20"><path d="M4 16V9M10 16V4M16 16v-5"/></svg>Puntos y créditos</button>
+      <button class="nav" data-v="anuario"><svg viewBox="0 0 20 20"><path d="M4 4h5a2 2 0 012 2v10a2 2 0 00-2-2H4zM16 4h-5a2 2 0 00-2 2v10a2 2 0 012-2h5z"/></svg>Anuario</button>
+      <button class="nav" data-v="sorteo"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3v14M3 10h14"/></svg>Sorteos</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Comunicación</div>
+      <button class="nav" data-v="mensajes"><svg viewBox="0 0 20 20"><path d="M17 9.5a6.5 6.5 0 01-9.6 5.7L3 16.5l1.4-4.2A6.5 6.5 0 1117 9.5z"/></svg>Mensajes por WhatsApp</button>
+    </div>
+
+    <div class="grupo">
+      <div class="et">Inscripciones</div>
+      <button class="nav" data-v="clupik"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3v14"/></svg>Clubes → Clupik</button>
+    </div>
+
+    <div class="rail-pie">
+      <button class="mini" id="btn-tema">Cambiar tema</button>
+      <button class="mini" id="btn-instalar" hidden>Instalar en el móvil</button>
+      <button class="mini" id="btn-borrar">Borrar datos de este dispositivo</button>
+      <div>Los datos de los colegiales no están en la página: viven solo en este dispositivo y, si lo configuras, en tu hoja de Google.</div>
+    </div>
+  </nav>
+
+  <main>
+    <!-- ================= RESUMEN ================= -->
+    <section class="vista on" id="v-resumen">
+      <div class="cabecera">
+        <div>
+          <h1>Resumen</h1>
+          <p>Panorama del curso y de lo que la Secretaría ya resuelve de forma automática.</p>
+        </div>
+        <div class="estado" id="resumen-estado"></div>
+      </div>
+
+      <div class="panel inicio-vacio" id="inicio-vacio" hidden>
+        <h3>Empieza cargando el censo</h3>
+        <p class="nota" style="margin:0 0 12px; font-size:13.5px">La página no trae ningún dato personal: los colegiales se cargan desde tu Excel o tu hoja de Google y se quedan solo en este dispositivo.</p>
+        <div class="barra" style="margin-bottom:0">
+          <button class="btn p" data-ir-censo="fichero">Cargar un Excel o CSV</button>
+          <button class="btn" data-ir-censo="hoja">Traer de mi hoja de Google</button>
+          <button class="btn" data-ir-censo="ejemplo">Probar con datos de ejemplo</button>
+        </div>
+      </div>
+
+      <div class="tarjetas" id="tarjetas-resumen"></div>
+
+      <div class="dos">
+        <div class="panel">
+          <h3>Lo que ya hace esta herramienta</h3>
+          <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px; font-size:13.5px; color:var(--ink-soft)">
+            <li>Pasa lista desde el móvil por categorías que configuras tú, calcula los puntos y lo sincroniza con tu hoja de Google.</li>
+            <li>Unifica listados de varios ficheros en un único censo, detectando duplicados y casos dudosos.</li>
+            <li>Valida DNI/NIE, teléfonos y habitaciones, y avisa de qué queda por revisar.</li>
+            <li>Genera certificados de residencia y carteles con QR listos para imprimir.</li>
+            <li>Prepara las altas de clubes deportivos para Clupik, con las reglas de email y perfil ya fijadas.</li>
+            <li>Redacta y envía mensajes de WhatsApp personalizados por grupos (anuario, datos, puntos…).</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Cómo se usa en el móvil</h3>
+          <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px; font-size:13.5px; color:var(--ink-soft)">
+            <li>Ábrela en el navegador del móvil y usa «Añadir a pantalla de inicio» (iPhone) o «Instalar app» (Android): se abre como una aplicación y funciona sin conexión.</li>
+            <li>Los datos se guardan en el propio dispositivo. Para tenerlos a salvo y compartirlos entre móviles, conecta tu hoja de Google en <b>Pasar lista → Categorías y hoja</b>.</li>
+            <li>La lista de asistencia se marca con un toque por persona y se sube a la hoja al terminar.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="barra" style="margin-top:16px">
+        <button class="btn p" data-ir="lista">Pasar lista</button>
+        <button class="btn" data-ir="censo">Ir al listado de colegiales</button>
+        <button class="btn" data-ir="clupik">Ir a clubes → Clupik</button>
+        <button class="btn" data-ir="mensajes">Ir a mensajes de WhatsApp</button>
+      </div>
+    </section>
+
+    <!-- ================= PASAR LISTA ================= -->
+    <section class="vista" id="v-lista">
+      <div class="cabecera">
+        <div>
+          <h1>Pasar lista</h1>
+          <p>Marca la asistencia con un toque por persona, por las categorías que tú definas. Funciona sin conexión y se sincroniza con tu hoja de Google.</p>
+        </div>
+        <div class="estado" id="lista-estado"></div>
+      </div>
+
+      <div class="subtabs" id="lista-tabs" role="tablist">
+        <button type="button" role="tab" data-t="pasar" aria-selected="true">Pasar lista</button>
+        <button type="button" role="tab" data-t="historial" aria-selected="false">Sesiones</button>
+        <button type="button" role="tab" data-t="totales" aria-selected="false">Totales</button>
+        <button type="button" role="tab" data-t="ajustes" aria-selected="false">Categorías y hoja</button>
+      </div>
+
+      <!-- pasar lista -->
+      <div class="subvista on" id="lt-pasar">
+        <div class="panel" id="lista-aviso" hidden></div>
+
+        <div class="panel" id="lista-nueva">
+          <h3>Nueva sesión</h3>
+          <div class="campos-fila">
+            <div class="campo"><label for="ls-cat">Categoría</label><select id="ls-cat"></select></div>
+            <div class="campo"><label for="ls-fecha">Fecha</label><input type="date" id="ls-fecha"></div>
+            <div class="campo"><label for="ls-titulo">Título (opcional)</label><input id="ls-titulo" placeholder="Ej.: Conferencia de bienvenida" autocomplete="off"></div>
+          </div>
+          <button class="btn p" id="ls-crear" type="button">Empezar a pasar lista</button>
+          <p class="nota" id="ls-pendiente" style="margin-top:12px"></p>
+        </div>
+
+        <div id="lista-sesion" hidden>
+          <div class="sesion-cab" id="ls-cab"></div>
+          <div class="contadores" id="ls-cont"></div>
+          <div class="barra barra-pegada">
+            <input class="busca" id="ls-busca" type="search" placeholder="Buscar por nombre o habitación…" autocomplete="off">
+            <select class="btn" id="ls-filtro" aria-label="Filtrar">
+              <option value="todos">Todos</option>
+              <option value="pendientes">Sin marcar</option>
+              <option value="P">Presentes</option>
+              <option value="A">Ausentes</option>
+              <option value="J">Justificados</option>
+            </select>
+          </div>
+          <div class="barra">
+            <button class="btn" id="ls-todos" type="button">Marcar a todos presentes</button>
+            <button class="btn" id="ls-limpiar" type="button">Borrar marcas</button>
+            <button class="btn p" id="ls-cerrar" type="button">Terminar y guardar</button>
+          </div>
+          <div class="caja"><div id="ls-filas" class="filas-lista"></div></div>
+          <div class="barra" style="margin-top:12px"><button class="btn p" id="ls-cerrar-2" type="button" style="flex:1">Terminar y guardar</button></div>
+          <p class="nota"><b>P</b> presente · <b>A</b> ausente · <b>J</b> justificado (no suma puntos). Pulsa otra vez para quitar la marca.</p>
+        </div>
+      </div>
+
+      <!-- historial -->
+      <div class="subvista" id="lt-historial">
+        <div class="barra">
+          <select class="btn" id="lh-cat" aria-label="Categoría"></select>
+          <button class="btn" id="lh-sync" type="button">Sincronizar ahora</button>
+        </div>
+        <div id="lh-lista"></div>
+      </div>
+
+      <!-- totales -->
+      <div class="subvista" id="lt-totales">
+        <div class="tarjetas" id="lt-tarjetas"></div>
+        <div class="barra">
+          <select class="btn" id="lt-cat" aria-label="Categoría"></select>
+          <input class="busca" id="lt-busca" type="search" placeholder="Buscar colegial…" autocomplete="off">
+          <button class="btn" id="lt-excel" type="button">Descargar Excel</button>
+          <button class="btn p" id="lt-puntos" type="button">Usar en Puntos y créditos</button>
+        </div>
+        <div class="caja"><div class="tablawrap"><table class="cards" id="lt-tabla"></table></div></div>
+        <p class="nota">Los puntos de cada persona son la suma de los puntos de las categorías donde estuvo presente. «Usar en Puntos y créditos» los lleva a esa pantalla para calcular los créditos.</p>
+      </div>
+
+      <!-- categorías y hoja -->
+      <div class="subvista" id="lt-ajustes">
+        <div class="dos">
+          <div class="panel">
+            <h3>Categorías</h3>
+            <p class="nota" style="margin-top:0">Cada categoría es un tipo de acto o actividad (conferencias, deportes, reuniones…). Puedes crear todas las que quieras y decidir cuántos puntos da cada asistencia.</p>
+            <div id="lc-lista"></div>
+            <div class="campos-fila" style="margin-top:12px">
+              <div class="campo"><label for="lc-nombre">Nombre</label><input id="lc-nombre" placeholder="Ej.: Actividades culturales" autocomplete="off"></div>
+              <div class="campo" style="max-width:130px"><label for="lc-puntos">Puntos por asistencia</label><input id="lc-puntos" type="number" inputmode="decimal" min="0" step="0.5" value="1"></div>
+            </div>
+            <button class="btn p" id="lc-anadir" type="button">Añadir categoría</button>
+            <div class="sugeridas" id="lc-sugeridas"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Hoja de Google</h3>
+            <p class="nota" style="margin-top:0">Conecta una hoja de cálculo tuya para guardar la asistencia, compartirla entre varios móviles y traer el censo. Hace falta crear una vez un pequeño script (2 minutos).</p>
+            <div class="campo"><label for="hs-url">Dirección de la aplicación web (termina en /exec)</label>
+              <input id="hs-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+            <div class="campo"><label for="hs-token">Clave de acceso (la misma que pusiste en el script)</label>
+              <input id="hs-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+            <label class="fila-sel" style="border:0; padding:4px 0 10px"><input type="checkbox" id="hs-auto"><span>Sincronizar solo, al marcar o al volver la conexión</span></label>
+            <div class="barra">
+              <button class="btn p" id="hs-probar" type="button">Probar conexión</button>
+              <button class="btn" id="hs-sync" type="button">Sincronizar ahora</button>
+            </div>
+            <div class="barra">
+              <button class="btn" id="hs-censo-bajar" type="button">Traer el censo de la hoja</button>
+              <button class="btn" id="hs-censo-subir" type="button">Subir el censo a la hoja</button>
+            </div>
+            <p class="nota" id="hs-estado"></p>
+            <details class="como">
+              <summary>Cómo crear la conexión (una sola vez)</summary>
+              <ol>
+                <li>Crea una hoja de cálculo nueva en Google Sheets (o abre la tuya).</li>
+                <li>Menú <b>Extensiones → Apps Script</b>. Borra lo que haya y pega el código de abajo.</li>
+                <li>En Apps Script: <b>Configuración del proyecto (⚙) → Propiedades de la secuencia de comandos → Añadir propiedad</b>: nombre <span class="mono">CLAVE</span>, valor la clave que quieras (la misma que pondrás aquí arriba).</li>
+                <li><b>Implementar → Nueva implementación → Aplicación web</b>. «Ejecutar como»: <i>Yo</i>. «Quién tiene acceso»: <i>Cualquier usuario</i>. Autoriza los permisos.</li>
+                <li>Copia la dirección que termina en <span class="mono">/exec</span> y pégala arriba.</li>
+              </ol>
+              <div class="barra" style="margin:8px 0 0"><button class="btn" id="hs-copiar-codigo" type="button">Copiar el código del script</button></div>
+              <p class="nota">Si más adelante cambias el código, hay que crear una <b>nueva versión</b> de la implementación. La hoja crea sola las pestañas «Censo», «Categorías», «Sesiones», «Asistencia» y «Totales».</p>
+            </details>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
+          <h3>Copia de seguridad</h3>
+          <p class="nota" style="margin-top:0">Descarga todo lo de «Pasar lista» (categorías, sesiones y marcas) en un archivo, o recupéralo desde otro archivo.</p>
+          <div class="barra" style="margin-bottom:0">
+            <button class="btn" id="lb-bajar" type="button">Descargar copia (.json)</button>
+            <button class="btn" id="lb-subir" type="button">Recuperar copia…</button>
+            <input type="file" id="lb-file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= CENSO ================= -->
+    <section class="vista" id="v-censo">
+      <div class="cabecera">
+        <div>
+          <h1>Listado de colegiales</h1>
+          <p>La hoja maestra del curso. Todo lo demás —certificados, carteles, mensajes— sale de aquí.</p>
+        </div>
+        <div class="estado" id="estado"></div>
+      </div>
+
+      <div class="zona" id="zona-censo">
+        <b id="zona-censo-t">Carga el censo</b>
+        <span id="zona-censo-d">Arrastra aquí un Excel o CSV (en el móvil, pulsa para elegirlo) con apellidos, nombre, teléfono, habitación, DNI…</span>
+        <span class="zona-acc"><button class="btn" id="btn-abrir" type="button">Elegir fichero</button>
+        <button class="btn" id="btn-censo-hoja" type="button">Traer de mi hoja de Google</button>
+        <button class="btn" id="btn-censo-ejemplo" type="button">Datos de ejemplo</button></span>
+        <input type="file" id="file-censo" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+
+      <div class="tarjetas" id="tarjetas-censo"></div>
+
+      <div class="barra">
+        <input class="busca" id="busca" placeholder="Buscar por apellido, nombre, habitación o DNI…">
+        <button class="btn" id="btn-copiar">Copiar tabla</button>
+        <button class="btn p" id="btn-imp-censo">Imprimir listado</button>
+      </div>
+
+      <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-censo"></table></div></div>
+    </section>
+
+    <!-- ================= UNIFICAR ================= -->
+    <section class="vista" id="v-unificar">
+      <div class="cabecera"><div>
+        <h1>Unificar listados</h1>
+        <p>Junta varias fuentes en un censo único: combina los nombres, descarta repetidos y avisa de los casos que se parecen sin ser la misma persona.</p>
+      </div></div>
+
+        <div class="panel">
+          <h3>Ficheros del ordenador</h3>
+          <div class="zona" id="zona-uni" style="margin-bottom:0">
+            <b>Arrastra dos o más ficheros</b>
+            Se comparan por nombre y apellidos, sin distinguir mayúsculas ni acentos
+            <input type="file" id="file-uni" accept=".xlsx,.xls,.csv" multiple hidden>
+          </div>
+        </div>
+
+      <div id="res-uni"></div>
+    </section>
+
+    <!-- ================= VALIDAR ================= -->
+    <section class="vista" id="v-validar">
+      <div class="cabecera"><div>
+        <h1>Validación de datos</h1>
+        <p>Repasa el censo entero: letra de control del DNI, formato de los NIE, documentos repetidos y fichas incompletas.</p>
+      </div></div>
+      <div class="tarjetas" id="tarjetas-val"></div>
+      <div id="res-val"></div>
+    </section>
+
+    <!-- ================= HABITACIONES ================= -->
+    <section class="vista" id="v-habitaciones">
+      <div class="cabecera"><div>
+        <h1>Habitaciones</h1>
+        <p>El censo ordenado por número de habitación, con las dobles agrupadas.</p>
+      </div></div>
+      <div class="tarjetas" id="tarjetas-hab"></div>
+      <div class="barra">
+        <button class="btn" id="btn-copiar-hab">Copiar tabla</button>
+        <button class="btn p" id="btn-imp-hab">Imprimir por habitación</button>
+      </div>
+      <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-hab"></table></div></div>
+    </section>
+
+    <!-- ================= PLANO ================= -->
+    <section class="vista" id="v-plano">
+      <div class="cabecera"><div>
+        <h1>Plano del Colegio</h1>
+        <p>El cuadro de habitaciones tal cual está en pared, pero vivo: cada cuarto con quien lo ocupa este curso. Pulsa una habitación para ver la ficha, arrastra un nombre a otra habitación para moverlo, o haz doble clic sobre él para corregirlo.</p>
+      </div>
+      <div class="estado" id="plano-estado"></div>
+      </div>
+
+      <div class="barra">
+        <input class="busca" id="plano-busca" placeholder="Buscar un colegial y ver su habitación…">
+        <select class="btn" id="plano-color" style="cursor:pointer">
+          <option value="ocupacion">Colorear: ocupación</option>
+          <option value="tipo">Colorear: tipo de habitación</option>
+          <option value="datos">Colorear: fichas incompletas</option>
+        </select>
+        <button class="btn" id="plano-imprimir">Imprimir plano</button>
+      </div>
+
+      <div id="plano-lienzo"></div>
+
+      <div class="leyenda" style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:14px; font-size:12px; color:var(--ink-soft)">
+        <span><b style="color:var(--ink)">D</b> derecha · <b style="color:var(--ink)">I</b> izquierda · <b style="color:var(--ink)">*</b> tal como figura en el cuadro original</span>
+      </div>
+    </section>
+
+    <!-- ================= CERTIFICADOS ================= -->
+    <section class="vista" id="v-certificados">
+      <div class="cabecera"><div>
+        <h1>Certificados de residencia</h1>
+        <p>Un certificado por colegial sobre la plantilla del Colegio, con el nombre completo, el documento y la concordancia de género.</p>
+      </div></div>
+      <div class="dos">
+        <div class="panel">
+          <h3>Texto del certificado</h3>
+          <div class="campo"><label for="cert-dir">Firma</label><input id="cert-dir" class="persist" placeholder="Nombre de quien firma"></div>
+          <div class="campo"><label for="cert-cargo">Cargo</label><input id="cert-cargo" class="persist" value="La Directora"></div>
+          <div class="campo"><label for="cert-curso">Curso</label><input id="cert-curso" class="persist" value="2026/27"></div>
+          <div class="campo"><label for="cert-fecha">Fecha</label><input id="cert-fecha" class="persist" placeholder="1 de septiembre de 2026"></div>
+          <button class="btn p" id="btn-imp-cert">Imprimir seleccionados</button>
+          <p class="nota" id="cert-nota"></p>
+        </div>
+        <div class="panel">
+          <h3>Colegiales</h3>
+          <div class="barra" style="margin-bottom:10px">
+            <button class="btn" id="cert-todos">Todos</button>
+            <button class="btn" id="cert-ninguno">Ninguno</button>
+            <input class="busca" id="cert-busca" placeholder="Buscar…">
+          </div>
+          <div class="lista-sel" id="cert-lista"></div>
+          <p class="nota">El género se deduce del nombre; púlsalo para corregirlo si algún caso no cuadra.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= CARTELES ================= -->
+    <section class="vista" id="v-carteles">
+      <div class="cabecera"><div>
+        <h1>Carteles con QR</h1>
+        <p>Cartel A4 con el escudo y un código QR: formulario de bienvenida, grupo de WhatsApp o cualquier enlace.</p>
+      </div></div>
+      <div class="dos">
+        <div class="panel">
+          <h3>Contenido</h3>
+          <div class="campo"><label for="q-preset">Plantilla</label>
+            <select id="q-preset">
+              <option value="bienvenida">Bienvenida al curso</option>
+              <option value="whatsapp">Grupo de WhatsApp</option>
+              <option value="libre">En blanco</option>
+            </select></div>
+          <div class="campo"><label for="q-t1">Titular</label><input id="q-t1" class="persist" value="Bienvenidos"></div>
+          <div class="campo"><label for="q-t2">Segunda línea</label><input id="q-t2" class="persist" value="al curso"></div>
+          <div class="campo"><label for="q-t3">Destacado</label><input id="q-t3" class="persist" value="2026-27"></div>
+          <div class="campo"><label for="q-pie">Texto bajo el QR</label><input id="q-pie" class="persist" value="Escanear para rellenar formulario de bienvenida"></div>
+          <div class="campo"><label for="q-url">Enlace del código</label><input id="q-url" type="url" inputmode="url" placeholder="https://…"></div>
+          <button class="btn p" id="btn-imp-cartel">Imprimir cartel</button>
+        </div>
+        <div>
+          <div class="previa">
+            <div class="cartel">
+              <div class="cinta t"></div><div class="oro t"></div>
+              <div class="cuerpo">
+                <div class="sup">
+                  <img src="img/escudo.png" alt="">
+                  <div class="h" id="pv-h">Bienvenidos<br>al curso <span id="pv-h3">2026-27</span></div>
+                </div>
+                <div class="qr" id="pv-qr"></div>
+                <div class="pie" id="pv-pie">Escanear para rellenar formulario de bienvenida</div>
+              </div>
+              <div class="oro b"></div><div class="cinta b"></div>
+            </div>
+          </div>
+          <p class="nota" style="text-align:center">Vista previa a escala · se imprime en A4</p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= PUNTOS ================= -->
+    <section class="vista" id="v-puntos">
+      <div class="cabecera"><div>
+        <h1>Puntos y créditos</h1>
+        <p>Convierte los puntos de participación en créditos según los tramos del Colegio y muestra quién se queda corto.</p>
+      </div></div>
+
+      <div class="aviso oro"><span class="punto" style="margin-top:7px"></span>
+        <div>Tramos vigentes: <b>0–10 puntos → 0 créditos · 10–20 → 1 · 20–25 → 2 · más de 25 → 3</b>.
+        Se calcula sobre el total de puntos: puedes traerlos de lo registrado en «Pasar lista» o arrastrar una tabla de puntos.</div></div>
+
+      <div class="zona" id="zona-pts">
+        <b>Arrastra la tabla de puntos</b>
+        Se buscan las columnas de apellidos, nombre y total de puntos
+        <input type="file" id="file-pts" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+
+      <div class="tarjetas" id="tarjetas-pts"></div>
+      <div class="barra">
+        <button class="btn p" id="btn-pts-lista">Usar los puntos de «Pasar lista»</button>
+        <button class="btn" id="btn-copiar-pts">Copiar tabla</button>
+        <button class="btn" id="btn-imp-pts">Imprimir créditos</button>
+      </div>
+      <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-pts"></table></div></div>
+    </section>
+
+    <!-- ================= ANUARIO ================= -->
+    <section class="vista" id="v-anuario">
+      <div class="cabecera"><div>
+        <h1>Anuario del curso</h1>
+        <p>Seguimiento de lo que hay que recoger de cada colegial y plantillas de la orla. El montaje de las páginas vendrá después; lo que atasca un anuario es perseguir 114 fotos.</p>
+      </div></div>
+
+      <div class="tarjetas" id="tarjetas-anu"></div>
+
+      <div class="barra">
+        <input class="busca" id="anu-busca" placeholder="Buscar colegial…">
+        <select class="btn" id="anu-filtro" style="cursor:pointer">
+          <option value="todos">Todos</option>
+          <option value="pendientes">Solo pendientes</option>
+          <option value="listos">Solo completos</option>
+        </select>
+        <button class="btn" id="btn-copiar-anu">Copiar pendientes</button>
+        <button class="btn" id="btn-imp-pend">Imprimir pendientes</button>
+        <button class="btn p" id="btn-imp-orla">Imprimir orla</button>
+      </div>
+
+      <div class="aviso"><span class="punto" style="margin-top:7px;color:var(--carmin)"></span>
+        <div>Pulsa cada casilla para marcar lo que ya has recibido. La <b>orla</b> se imprime con un hueco por
+        colegial, su nombre y su habitación, lista para pegar las fotos o para usarla como plantilla de maquetación.</div></div>
+
+      <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-anu"></table></div></div>
+    </section>
+
+    <!-- ================= SORTEO ================= -->
+    <section class="vista" id="v-sorteo">
+      <div class="cabecera"><div>
+        <h1>Sorteos</h1>
+        <p>Para repartir turnos, elegir orden de habitaciones o rifar lo que toque: el bombo saca un nombre entre los colegiales del curso.</p>
+      </div>
+      <div class="estado" id="sorteo-estado"></div>
+      </div>
+
+      <div class="dos" style="grid-template-columns:1.25fr .75fr">
+        <div class="panel" style="text-align:center">
+          <div class="bombo">
+            <div class="bombo-marco"></div>
+            <div class="bombo-cinta" id="bombo-cinta"></div>
+          </div>
+          <div class="barra" style="justify-content:center; margin:16px 0 0">
+            <button class="btn p" id="sorteo-girar" style="padding:10px 26px; font-size:15px">Sortear</button>
+            <button class="btn" id="sorteo-otra" hidden>Otro más</button>
+          </div>
+          <p class="nota" id="sorteo-nota">Pulsa para empezar.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Quién entra en el bombo</h3>
+          <div class="campo"><label for="sorteo-grupo">Participantes</label>
+            <select id="sorteo-grupo">
+              <option value="todos">Todo el Colegio</option>
+              <option value="moncloa">Pabellón Moncloa</option>
+              <option value="arguelles">Pabellón Argüelles</option>
+              <option value="dobles">Solo habitaciones dobles</option>
+            </select></div>
+          <label class="fila-sel" style="border:0; padding:6px 0">
+            <input type="checkbox" id="sorteo-sinrep" checked>
+            <span>No repetir a quien ya ha salido</span>
+          </label>
+          <p class="nota" id="sorteo-bombo"></p>
+
+          <h3 style="margin-top:14px">Han salido</h3>
+          <div class="lista-sel" id="sorteo-historial" style="max-height:230px"></div>
+          <div class="barra" style="margin-top:10px">
+            <button class="btn" id="sorteo-copiar">Copiar lista</button>
+            <button class="btn" id="sorteo-limpiar">Empezar de cero</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= MENSAJES ================= -->
+    <section class="vista" id="v-mensajes">
+      <div class="cabecera"><div>
+        <h1>Mensajes por WhatsApp</h1>
+        <p>Escribe el mensaje una vez, elige a quién va y lánzalo. Cada envío sale de tu propio WhatsApp, ya personalizado y listo para enviar.</p>
+      </div></div>
+
+      <div class="dos">
+        <div class="panel">
+          <h3>El mensaje</h3>
+          <div class="campo"><label for="msg-plantilla">Plantilla</label>
+            <select id="msg-plantilla">
+              <option value="foto">Anuario · pedir material</option>
+              <option value="datos">Secretaría · completar datos</option>
+              <option value="puntos">Participación · aviso de créditos</option>
+              <option value="acto">Convocatoria de acto</option>
+              <option value="libre">En blanco</option>
+            </select></div>
+          <div class="campo"><label for="msg-texto">Texto</label>
+            <textarea id="msg-texto" rows="7" style="padding:9px 11px; border:1px solid var(--linea-fuerte); border-radius:8px; background:var(--surface); resize:vertical; font-size:13.5px"></textarea></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px" id="msg-vars"></div>
+          <div class="campo"><label>Así le llegará al primero de la lista</label>
+            <div id="msg-previa" style="white-space:pre-wrap; background:var(--verde-suave); color:var(--ink); padding:11px 13px; border-radius:10px 10px 10px 2px; font-size:13.5px; min-height:60px"></div></div>
+          <p class="nota">Las variables se sustituyen por los datos de cada colegial.</p>
+        </div>
+
+        <div class="panel">
+          <h3>A quién</h3>
+          <div class="campo"><label for="msg-publico">Destinatarios</label>
+            <select id="msg-publico">
+              <option value="todos">Todo el Colegio</option>
+              <option value="anuario">Pendientes de material del anuario</option>
+              <option value="datos">Fichas incompletas en secretaría</option>
+              <option value="sincreditos">Sin créditos de participación</option>
+              <option value="moncloa">Pabellón Moncloa</option>
+              <option value="arguelles">Pabellón Argüelles</option>
+            </select></div>
+          <div class="tarjetas" id="msg-tarjetas" style="grid-template-columns:1fr 1fr"></div>
+          <div class="barra" style="margin-bottom:10px">
+            <button class="btn p" id="msg-siguiente">Enviar al siguiente</button>
+            <button class="btn" id="msg-copiar-tel">Copiar teléfonos</button>
+            <button class="btn" id="msg-reiniciar">Reiniciar envíos</button>
+          </div>
+          <div class="lista-sel" id="msg-lista"></div>
+          <p class="nota">Pulsa un nombre para abrir su chat directamente.</p>
+        </div>
+      </div>
+
+      <div class="aviso oro" style="margin-top:16px"><span class="punto" style="margin-top:7px"></span>
+        <div><b>Cómo funciona:</b> cada botón abre WhatsApp con el mensaje ya escrito en el chat de esa persona;
+        solo tienes que darle a enviar. No se manda nada a tus espaldas y no hace falta conectar ninguna cuenta.
+        Para que salga de verdad <em>solo</em> con un clic hace falta la API oficial de WhatsApp Business,
+        con número de empresa y plantillas aprobadas por Meta: eso se monta en la versión con servidor.</div></div>
+    </section>
+
+    <!-- ================= CLUBES → CLUPIK ================= -->
+    <section class="vista" id="v-clupik">
+      <div class="cabecera"><div>
+        <h1>Clubes → Clupik</h1>
+        <p>Pega la lista de quienes se apuntaron y prepara cada alta con las reglas acordadas: correo fijo y teléfono en blanco solo cuando haga falta un perfil nuevo, sin tocar nunca los perfiles que ya existen. Vale para cualquier club deportivo — elige la modalidad en cada ficha o fila.</p>
+      </div></div>
+
+      <div class="aviso oro"><span class="punto" style="margin-top:7px"></span>
+        <div><b>Cómo se hace cada alta en Clupik → Base de datos:</b> busca primero por DNI.
+        Si aparece un perfil <b>con</b> licencia de esa disciplina para la temporada 2026-2027, ya está inscrito: no toques nada.
+        Si aparece un perfil <b>sin</b> esa licencia, usa «Crear otra licencia y continuar» sin modificar sus datos.
+        Si no aparece ningún perfil, usa «Crear perfil nuevo» con el correo fijo que configures aquí abajo y Teléfono en blanco.
+        Al confirmar cada alta, elige siempre «Volver a donde estaba» — nunca «Realizar otra inscripción».
+        Tipo: Deportista · Club y disciplina: según la modalidad elegida en cada fila (Futsal y Vóleibol se inscriben bajo el club «…A» o «…B» correspondiente).</div>
+      </div>
+
+        <div class="panel" style="margin-bottom:16px">
+          <h3>Pega la lista</h3>
+          <div class="campo"><label for="clupik-texto">Una persona por línea</label>
+            <textarea id="clupik-texto" rows="4" placeholder="Ej: García López, Marta — 12345678A — 03/05/2007" style="padding:9px 11px; border:1px solid var(--linea-fuerte); border-radius:8px; background:var(--surface); resize:vertical; font-size:13px"></textarea></div>
+          <div class="campo"><label for="clupik-email">Correo fijo para los perfiles nuevos</label>
+            <input id="clupik-email" class="persist" type="email" inputmode="email" autocomplete="off" placeholder="correo-del-club@ejemplo.com"></div>
+          <div class="campo"><label for="clupik-modalidad-def">Club / disciplina de esta ficha</label>
+            <select id="clupik-modalidad-def"></select></div>
+          <div class="campo"><label for="clupik-equipo-def">Género de esta ficha</label>
+            <select id="clupik-equipo-def"><option value="M">Masculino</option><option value="F">Femenino</option></select></div>
+          <div class="barra" style="margin-bottom:0">
+            <button class="btn p" id="btn-clupik-extraer">Añadir a la lista</button>
+            <button class="btn" id="btn-clupik-fila">Añadir fila en blanco</button>
+          </div>
+          <p class="nota" id="clupik-estado"></p>
+        </div>
+
+      <div class="tarjetas" id="tarjetas-clupik"></div>
+
+      <div class="barra">
+        <button class="btn" id="btn-clupik-copiar">Copiar tabla</button>
+        <button class="btn" id="btn-clupik-copiar-todo">Copiar fichas (texto)</button>
+        <button class="btn" id="btn-clupik-descargar">Descargar CSV</button>
+        <button class="btn" id="btn-clupik-vaciar">Vaciar lista</button>
+      </div>
+
+      <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-clupik"></table></div></div>
+      <p class="nota">Esta página solo ordena y prepara los datos: no entra en Clupik por ti. Pásale esta lista, fila a fila, a quien vaya a hacer las altas y actualiza el estado según lo que encuentre.</p>
+    </section>
+  </main>
+</div>
+
+<div id="velo"></div>
+<nav id="tabbar" aria-label="Navegación principal">
+  <button type="button" data-v="resumen"><svg viewBox="0 0 20 20"><path d="M3 10.5L10 4l7 6.5M5 9v7h10V9"/></svg>Inicio</button>
+  <button type="button" data-v="lista"><svg viewBox="0 0 20 20"><path d="M4 5.5l1.5 1.5L8 4.5M4 11l1.5 1.5L8 10M4 16.5l1.5 1.5 2.5-2.5M11 6h6M11 11.5h6M11 17h6"/></svg>Lista</button>
+  <button type="button" data-v="censo"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h9"/></svg>Colegiales</button>
+  <button type="button" data-v="plano"><svg viewBox="0 0 20 20"><path d="M3 4h6v5H3zM11 4h6v5h-6zM3 11h6v5H3zM11 11h6v5h-6z"/></svg>Plano</button>
+  <button type="button" id="tab-mas"><svg viewBox="0 0 20 20"><circle cx="4.5" cy="10" r="1.3"/><circle cx="10" cy="10" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/></svg>Más</button>
+</nav>
+
+<div id="imprimible"></div>
+
+<script src="lib/xlsx.full.min.js"></script>
+<script src="lib/qrcode.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script src="app.js"></script>
+<script>
+if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+</script>
+</body>
+</html>
