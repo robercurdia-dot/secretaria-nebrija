@@ -107,6 +107,12 @@
           <button class="btn" data-ir-censo="hoja">Traer de mi hoja de Google</button>
           <button class="btn" data-ir-censo="ejemplo">Probar con datos de ejemplo</button>
         </div>
+        <div class="vinculo">
+          <div class="campo"><label for="vc-codigo">¿Ya la usas en otro dispositivo? Pega aquí el código de vinculación</label>
+            <input id="vc-codigo" type="text" placeholder="NEB1-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+          <button class="btn p" id="vc-vincular" type="button">Vincular y traer los datos</button>
+          <p class="nota" id="vc-estado" style="margin:8px 0 0"></p>
+        </div>
       </div>
 
       <div class="tarjetas" id="tarjetas-resumen"></div>
@@ -251,6 +257,17 @@
               <button class="btn" id="hs-censo-subir" type="button">Subir el censo a la hoja</button>
             </div>
             <p class="nota" id="hs-estado"></p>
+            <div class="vinculo">
+              <h4>Vincular otro móvil o la app instalada</h4>
+              <p class="nota" style="margin-top:0">El código lleva la dirección y la clave en un solo texto: pégalo en el otro dispositivo y se conecta y trae el censo solo. En iPhone, la app de la pantalla de inicio no comparte datos con Safari, así que hay que vincularla una vez desde dentro. Trátalo como una contraseña: envíalo solo por un chat privado.</p>
+              <div class="barra">
+                <button class="btn" id="hs-cod-copiar" type="button">Copiar código de vinculación</button>
+                <button class="btn" id="hs-cod-compartir" type="button">Compartir…</button>
+              </div>
+              <div class="campo"><label for="hs-cod-pegar">Vincular este dispositivo con un código</label>
+                <input id="hs-cod-pegar" type="text" placeholder="NEB1-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+              <button class="btn p" id="hs-cod-aplicar" type="button">Vincular</button>
+            </div>
             <details class="como">
               <summary>Cómo crear la conexión (una sola vez)</summary>
               <ol>

@@ -76,7 +76,7 @@ Los datos que antes venían incluidos (firma del certificado, enlaces de los car
 
 ## Publicar cambios
 
-Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v2` → `secretaria-v3`) para que los móviles descarguen la versión nueva.
+Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v3` → `secretaria-v4`) para que los móviles descarguen la versión nueva.
 
 ## Estructura
 

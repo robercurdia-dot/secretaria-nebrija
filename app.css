@@ -471,3 +471,9 @@ details.como ol{padding-left:20px; margin:8px 0; font-size:13px; color:var(--ink
   .barra-pegada .busca{flex:1 1 0; min-width:0}
   .barra-pegada select{flex:none; max-width:46%}
 }
+
+/* vinculación por código */
+.vinculo{margin-top:16px; padding-top:14px; border-top:1px solid var(--linea)}
+.vinculo h4{margin:0 0 6px; font-size:14px}
+.vinculo .campo{margin-bottom:8px}
+.vinculo .barra{margin-bottom:12px}

@@ -2128,20 +2128,83 @@ function irListaTab(t){ LT=t; pintarLista(); }
 })();
 
 /* ---------- censo desde la hoja / datos de ejemplo ---------- */
-function censoDesdeHoja(){
+function censoDesdeHoja(silencioso){
   if(!hojaConfigurada()){
+    if(silencioso) return Promise.resolve(false);
     toast("Primero conecta tu hoja de Google.");
     vista("lista"); irListaTab("ajustes"); return Promise.resolve(false);
   }
-  toast("Leyendo el censo de la hoja…");
+  if(!silencioso) toast("Leyendo el censo de la hoja…");
   return hojaLlamar("censo_leer").then(function(r){
     var filas=filasDeHoja(r.valores||[]);
     if(!filas.length) throw new Error("No he encontrado colegiales en la pestaña «Censo» de la hoja (¿tiene cabeceras como Apellidos, Nombre, Habitación…?).");
     if(S.censo.length && !confirm("La hoja trae "+filas.length+" colegiales. ¿Sustituir el censo actual ("+S.censo.length+")?")) return false;
     S.censo=filas; S.origen="hoja"; S.sel={}; guardar(); pintarCenso();
     toast(filas.length+" colegiales cargados desde la hoja."); return true;
-  }).catch(function(err){ toast(err.message, "mal"); return false; });
+  }).catch(function(err){ if(!silencioso) toast(err.message, "mal"); return false; });
 }
+
+/* ---------- vinculación por código ---------- */
+function b64u(s){ return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function ub64(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return decodeURIComponent(escape(atob(s))); }
+function codigoVinculo(){
+  var c=hojaCfg();
+  return "NEB1-"+b64u(JSON.stringify({ u:(c.url||"").trim(), k:(c.token||"").trim() }));
+}
+function leerCodigo(txt){
+  var m=String(txt||"").replace(/\s+/g,"").match(/NEB1-([A-Za-z0-9_\-]+)/);
+  if(!m) return null;
+  try{
+    var d=JSON.parse(ub64(m[1]));
+    if(d && typeof d.u==="string" && typeof d.k==="string" && d.u && d.k) return d;
+  }catch(e){}
+  return null;
+}
+function vincular(txt, estado){
+  var d=leerCodigo(txt);
+  var say=function(t, mal){ if(estado){ estado.textContent=t; estado.style.color = mal ? "var(--carmin)" : ""; } else toast(t, mal?"mal":undefined); };
+  if(!d){ say("Ese código no es válido. Cópialo entero, empieza por NEB1-.", true); return Promise.resolve(false); }
+  var antes=Object.assign({}, S.ajustes.sheets);
+  S.ajustes.sheets.url=d.u; S.ajustes.sheets.token=d.k;
+  if(!hojaConfigurada()){ S.ajustes.sheets=antes; say("El código no trae una dirección de hoja válida.", true); return Promise.resolve(false); }
+  guardar();
+  say("Conectando con la hoja…");
+  return hojaLlamar("ping").then(function(r){
+    say("Conectado con la hoja «"+(r.hoja||"sin nombre")+"». Trayendo datos…");
+    var paso = S.censo.length ? Promise.resolve(true) : censoDesdeHoja(true);
+    return paso.then(function(){ return sincronizar(true); }).then(function(){
+      pintarAjustesLista(); pintarCenso();
+      say(S.censo.length ? "Vinculado: "+S.censo.length+" colegiales y la lista de asistencia al día." : "Vinculado. La hoja aún no tiene censo: súbelo desde «Pasar lista → Categorías y hoja».");
+      if(!estado) toast("Dispositivo vinculado con la hoja.");
+      return true;
+    });
+  }).catch(function(err){
+    S.ajustes.sheets=antes; guardar(); pintarAjustesLista();
+    say(err.message, true); return false;
+  });
+}
+function copiarTexto(t, boton){
+  var ok=function(){ if(!boton) return; var x=boton.textContent; boton.textContent="Copiado ✓"; setTimeout(function(){ boton.textContent=x; },1800); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ fallback(t, ok); });
+  else fallback(t, ok);
+}
+document.getElementById("vc-vincular").addEventListener("click", function(){
+  vincular(document.getElementById("vc-codigo").value, document.getElementById("vc-estado"));
+});
+document.getElementById("hs-cod-aplicar").addEventListener("click", function(){
+  vincular(document.getElementById("hs-cod-pegar").value, document.getElementById("hs-estado")).then(function(ok){ if(ok) document.getElementById("hs-cod-pegar").value=""; });
+});
+document.getElementById("hs-cod-copiar").addEventListener("click", function(){
+  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
+  copiarTexto(codigoVinculo(), this);
+});
+document.getElementById("hs-cod-compartir").addEventListener("click", function(){
+  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
+  var cod=codigoVinculo();
+  if(navigator.share) navigator.share({ text:cod }).catch(function(){});
+  else copiarTexto(cod, this);
+});
+
 function ejemploCenso(){
   var nombres=["Lucía","Martín","Carmen","Hugo","Paula","Daniel","Sara","Álvaro","Marta","Pablo","Elena","Javier","Irene","Adrián","Noelia","Sergio","Claudia","Iván","Laura","Mario"];
   var ap1=["García","Martínez","López","Sánchez","Pérez","Gómez","Ruiz","Díaz","Moreno","Álvarez"];
@@ -2180,6 +2243,7 @@ document.getElementById("q-preset").addEventListener("change", function(){
   actualizarCartel();
 });
 
+var hashVinc=(location.hash||"").match(/^#vincular=(.+)$/);
 cargar();
 restaurarCampos();
 pintarCenso();
@@ -2188,6 +2252,14 @@ pintarClupik();
 var inicial=(location.hash||"").replace("#","");
 vista(inicial && document.getElementById("v-"+inicial) ? inicial : "resumen");
 etiquetarTablas();
-if(hojaConfigurada() && S.ajustes.sheets.auto) setTimeout(function(){ sincronizar(true); }, 1200);
+if(hashVinc){
+  try{ history.replaceState(null, "", location.pathname+location.search); }catch(e){}
+  vista("resumen");
+  setTimeout(function(){ vincular(decodeURIComponent(hashVinc[1])); }, 400);
+} else if(hojaConfigurada() && S.ajustes.sheets.auto){
+  setTimeout(function(){
+    (S.censo.length ? Promise.resolve() : censoDesdeHoja(true)).then(function(){ return sincronizar(true); });
+  }, 1200);
+}
 
 })();
