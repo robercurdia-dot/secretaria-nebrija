@@ -2662,7 +2662,7 @@ function leerCodigo(txt){
 function vincular(txt, estado){
   var d=leerCodigo(txt);
   var say=function(t, mal){ if(estado){ estado.textContent=t; estado.style.color = mal ? "var(--carmin)" : ""; } else toast(t, mal?"mal":undefined); };
-  if(!d){ say("Ese código no es válido. Cópialo entero, empieza por NEB1-.", true); return Promise.resolve(false); }
+  if(!d){ say("Ese archivo o código no es válido: tiene que ser el archivo de vinculación generado por la app.", true); return Promise.resolve(false); }
   var antes=Object.assign({}, S.ajustes.sheets);
   S.ajustes.sheets.url=d.u; S.ajustes.sheets.token=d.k;
   if(!hojaConfigurada()){ S.ajustes.sheets=antes; say("El código no trae una dirección de hoja válida.", true); return Promise.resolve(false); }
@@ -2697,11 +2697,44 @@ document.getElementById("hs-cod-copiar").addEventListener("click", function(){
   if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
   copiarTexto(codigoVinculo(), this);
 });
+function archivoVinculo(){
+  var txt="Secretaría Nebrija · archivo de vinculación\r\nNo lo compartas: da acceso a tu hoja de Google. Bórralo después de usarlo.\r\n\r\n"+codigoVinculo()+"\r\n";
+  return new Blob([txt], { type:"text/plain" });
+}
 document.getElementById("hs-cod-compartir").addEventListener("click", function(){
   if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
   var cod=codigoVinculo();
   if(navigator.share) navigator.share({ text:cod }).catch(function(){});
   else copiarTexto(cod, this);
+});
+document.getElementById("hs-cod-archivo-bajar").addEventListener("click", function(){
+  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
+  var blob=archivoVinculo();
+  try{
+    var f=new File([blob], "vinculo-secretaria-nebrija.txt", { type:"text/plain" });
+    if(navigator.canShare && navigator.canShare({ files:[f] })){ navigator.share({ files:[f], title:"Vinculación Secretaría Nebrija" }).catch(function(){}); return; }
+  }catch(e){}
+  descargarBlob(blob, "vinculo-secretaria-nebrija.txt");
+});
+function leerArchivoVinculo(input, estado){
+  var f=input.files[0]; input.value=""; if(!f) return;
+  if(f.size>20000){ estado.textContent="Ese archivo no parece un archivo de vinculación."; estado.style.color="var(--carmin)"; return; }
+  f.text().then(function(t){ return vincular(t, estado); });
+}
+document.getElementById("zona-vc").addEventListener("click", function(e){ if(e.target.tagName!=="INPUT") document.getElementById("vc-archivo").click(); });
+document.getElementById("vc-archivo").addEventListener("change", function(){ leerArchivoVinculo(this, document.getElementById("vc-estado")); });
+document.getElementById("zona-hs-cod").addEventListener("click", function(e){ if(e.target.tagName!=="INPUT") document.getElementById("hs-cod-archivo").click(); });
+document.getElementById("hs-cod-archivo").addEventListener("change", function(){ leerArchivoVinculo(this, document.getElementById("hs-estado")); });
+[["zona-vc","vc-archivo","vc-estado"],["zona-hs-cod","hs-cod-archivo","hs-estado"]].forEach(function(t){
+  var z=document.getElementById(t[0]);
+  z.addEventListener("dragover", function(e){ e.preventDefault(); z.classList.add("hot"); });
+  z.addEventListener("dragleave", function(){ z.classList.remove("hot"); });
+  z.addEventListener("drop", function(e){
+    e.preventDefault(); z.classList.remove("hot");
+    var f=e.dataTransfer.files[0]; if(!f) return;
+    var est=document.getElementById(t[2]);
+    f.text().then(function(txt){ return vincular(txt, est); });
+  });
 });
 
 function ejemploCenso(){
