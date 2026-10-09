@@ -55,6 +55,19 @@ La dirección `/exec` es pública, pero solo responde si se envía la clave. Si 
 - Si dos móviles editan la **misma sesión a la vez**, gana el último que sincroniza para esa sesión. Para evitarlo, que cada persona pase lista de sesiones distintas.
 - Las sesiones borradas en un móvil se borran en los demás en su siguiente sincronización.
 
+## Acceso a Google Drive (opcional)
+
+Con el mismo script, la app puede **ver, buscar, mover, renombrar, duplicar y enviar a la papelera** archivos de tu Drive, **leer un Excel o una hoja de Drive para usarlo como censo, como puntos o como fuente de «Unificar listados»**, y **buscar y reemplazar texto** en documentos de Google y Word (siempre en una copia nueva).
+
+Está desactivado hasta que lo actives tú, una sola vez:
+
+1. Pega en Apps Script la última versión de [`apps-script/Code.gs`](apps-script/Code.gs) (reemplaza todo lo anterior).
+2. En *Propiedades de la secuencia de comandos* añade `DRIVE_ACCESO` con el valor `si`.
+3. *Implementar → Gestionar implementaciones → ✏ → Nueva versión → Implementar*. Google pedirá el permiso de Drive: *Revisar permisos → tu cuenta → Avanzado → Ir a… → Permitir*.
+4. En la app: **Archivo en Drive → Comprobar**.
+
+Quien tenga la clave (o el código de vinculación) podrá usar tu Drive desde la app. Trátalo como una contraseña y, si dejas de usar la función, pon `DRIVE_ACCESO` en `no`.
+
 ## Pasar lista
 
 - **Categorías libres**: tú las creas y decides cuántos puntos da cada asistencia (puede ser 0).
@@ -67,16 +80,14 @@ La dirección `/exec` es pública, pero solo responde si se envía la clave. Si 
 
 Esta versión es independiente de Claude, así que no incluye lo que dependía de él:
 
-- **Archivo en Drive** (navegar/renombrar/mover archivos del Drive).
-- **Actualizar documentos** (cambios por instrucción en Word).
 - **Lectura de fotos y de listas libres con IA** en Clupik (ahora el texto se separa con reglas simples: `Apellidos, Nombre — DNI — fecha`).
-- El buscador de Drive dentro de *Unificar listados* (sigue funcionando con ficheros del dispositivo).
+- **Búsqueda de Drive en lenguaje natural** y **cambios en documentos «por instrucción»**: ahora la búsqueda es por nombre/contenido y los cambios se indican como «buscar → reemplazar».
 
 Los datos que antes venían incluidos (firma del certificado, enlaces de los carteles, correo de Clupik) ahora se escriben una vez en cada campo y se recuerdan en el dispositivo.
 
 ## Publicar cambios
 
-Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v3` → `secretaria-v4`) para que los móviles descarguen la versión nueva.
+Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v4` → `secretaria-v5`) para que los móviles descarguen la versión nueva.
 
 ## Estructura
 

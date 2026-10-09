@@ -61,6 +61,8 @@
       <div class="et">Documentos</div>
       <button class="nav" data-v="certificados"><svg viewBox="0 0 20 20"><path d="M5 3h10v14l-5-3-5 3zM8 8h4"/></svg>Certificados</button>
       <button class="nav" data-v="carteles"><svg viewBox="0 0 20 20"><path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h2v2h-2zM15 15h1"/></svg>Carteles con QR</button>
+      <button class="nav" data-v="actualizar"><svg viewBox="0 0 20 20"><path d="M11 3H6a1 1 0 00-1 1v12a1 1 0 001 1h8a1 1 0 001-1V7zM11 3v4h4M7.5 12.5l5-5 1.5 1.5-5 5-2 .5z"/></svg>Actualizar documentos</button>
+      <button class="nav" data-v="drive"><svg viewBox="0 0 20 20"><path d="M7.5 3h5l5 8.5h-5zM7.5 3l-5 8.5L5 16h5zM5 16h10l2.5-4.5H7.5z"/></svg>Archivo en Drive</button>
     </div>
 
     <div class="grupo">
@@ -341,7 +343,113 @@
           </div>
         </div>
 
+        <div class="panel" style="margin-top:14px">
+          <h3>Archivos de Drive</h3>
+          <p class="nota" style="margin-top:0">Busca los listados en <b>Archivo en Drive</b>, ábrelos y pulsa «Añadir a Unificar listados». Se juntan con los que arrastres aquí.</p>
+          <div class="barra" style="margin-bottom:0">
+            <button class="btn" id="uni-ir-drive" type="button">Elegir archivos en Drive</button>
+            <button class="btn" id="uni-limpiar" type="button">Quitar todas las fuentes</button>
+          </div>
+          <div id="uni-fuentes" class="nota"></div>
+        </div>
+
       <div id="res-uni"></div>
+    </section>
+
+    <!-- ================= ARCHIVO EN DRIVE ================= -->
+    <section class="vista" id="v-drive">
+      <div class="cabecera"><div>
+        <h1>Archivo en Drive</h1>
+        <p>Navega por tu Google Drive, busca, mueve y renombra archivos, y usa un Excel o una hoja de Drive como censo, puntos o fuente para unificar.</p>
+      </div>
+      <div class="estado"><span class="chip demo" id="drive-chip"><span class="punto"></span>Sin conectar</span></div></div>
+
+      <div id="drive-aviso"></div>
+
+      <div id="drive-app" hidden>
+        <div class="barra">
+          <input class="busca" id="drive-q" type="search" placeholder="Buscar por nombre o contenido…" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <select id="drive-tipo" class="busca" style="max-width:150px" aria-label="Tipo de archivo">
+            <option value="todo">Todo</option><option value="word">Word / Docs</option><option value="excel">Excel / Hojas</option>
+            <option value="pdf">PDF</option><option value="imagen">Imágenes</option><option value="carpeta">Carpetas</option>
+          </select>
+          <button class="btn p" id="drive-buscar" type="button">Buscar</button>
+        </div>
+        <div class="barra">
+          <button class="btn" id="drive-inicio" type="button">Mi unidad</button>
+          <button class="btn" id="drive-recientes" type="button">Recientes</button>
+          <button class="btn" id="drive-refrescar" type="button">Actualizar</button>
+          <button class="btn" id="drive-nueva" type="button">Nueva carpeta</button>
+          <button class="btn" id="drive-duplicados" type="button">Nombres repetidos</button>
+        </div>
+        <div class="ruta" id="drive-ruta"></div>
+        <div class="caja"><div class="tablawrap"><table class="cards" id="drive-tabla"></table></div></div>
+        <p class="nota" id="drive-cuenta"></p>
+
+        <div class="panel" id="drive-detalle" hidden style="margin-top:14px">
+          <h3 id="drive-titulo"></h3>
+          <p class="nota" id="drive-meta" style="margin-top:0"></p>
+          <div class="barra">
+            <a class="btn" id="drive-abrir" target="_blank" rel="noopener" style="text-decoration:none">Abrir en Drive</a>
+            <button class="btn" id="drive-enlace" type="button">Copiar enlace</button>
+            <button class="btn" id="drive-leer" type="button">Leer contenido</button>
+            <button class="btn" id="drive-renombrar" type="button">Renombrar</button>
+            <button class="btn" id="drive-duplicar" type="button">Duplicar</button>
+          </div>
+          <div class="barra" id="drive-usos">
+            <button class="btn p" id="drive-usar-censo" type="button">Usar como censo</button>
+            <button class="btn" id="drive-usar-uni" type="button">Añadir a Unificar listados</button>
+            <button class="btn" id="drive-usar-pts" type="button">Usar para puntos</button>
+            <button class="btn" id="drive-usar-doc" type="button">Actualizar este documento</button>
+          </div>
+          <p class="nota" id="drive-est"></p>
+          <pre class="mono" id="drive-texto" style="display:none; white-space:pre-wrap; max-height:260px; overflow:auto; background:var(--surface-2); padding:10px; border-radius:8px; font-size:12px"></pre>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h3>Con los archivos marcados</h3>
+          <div class="barra">
+            <select id="drive-carpeta" class="busca" style="max-width:260px" aria-label="Carpeta de destino"><option value="">Mover a…</option></select>
+            <button class="btn" id="drive-mover" type="button">Mover</button>
+            <button class="btn" id="drive-papelera" type="button">Enviar a la papelera</button>
+          </div>
+          <div class="barra" style="margin-bottom:0">
+            <input class="busca" id="drive-lote-buscar" placeholder="Buscar en el nombre (p. ej. 24-25)" autocomplete="off">
+            <input class="busca" id="drive-lote-reemplazar" placeholder="Reemplazar por (p. ej. 25-26)" autocomplete="off">
+            <button class="btn" id="drive-lote-aplicar" type="button">Renombrar en bloque</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ACTUALIZAR DOCUMENTOS ================= -->
+    <section class="vista" id="v-actualizar">
+      <div class="cabecera"><div>
+        <h1>Actualizar documentos</h1>
+        <p>Cambia nombres, fechas o cursos en un documento: tú indicas qué buscar y por qué sustituirlo. Se guarda una copia nueva y el original no se toca.</p>
+      </div></div>
+
+      <div class="panel">
+        <h3>1 · Documento</h3>
+        <div class="barra" style="margin-bottom:6px">
+          <button class="btn p" id="doc-ir-drive" type="button">Elegir en Drive</button>
+          <button class="btn" id="doc-local" type="button">Subir un Word (.docx) o texto</button>
+          <input type="file" id="doc-file" accept=".docx,.txt" hidden>
+        </div>
+        <p class="nota" id="doc-detalle" style="margin:0">Ningún documento elegido. En Drive, abre el archivo y pulsa «Actualizar este documento».</p>
+        <strong id="doc-nombre"></strong>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h3>2 · Cambios</h3>
+        <div id="doc-pares"></div>
+        <div class="barra" style="margin-top:8px; margin-bottom:0">
+          <button class="btn" id="doc-mas" type="button">Añadir otro cambio</button>
+          <button class="btn" id="doc-probar" type="button">Contar coincidencias</button>
+          <button class="btn p" id="doc-guardar" type="button">Guardar copia corregida</button>
+        </div>
+        <p class="nota" id="doc-estado"></p>
+      </div>
     </section>
 
     <!-- ================= VALIDAR ================= -->

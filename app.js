@@ -1046,6 +1046,9 @@ function vista(id){
   window.scrollTo(0,0);
   try{ history.replaceState(null,"","#"+id); }catch(e){}
   if(id==="lista") pintarLista();
+  if(id==="drive" && typeof entrarDrive==="function") entrarDrive();
+  if(id==="actualizar" && typeof pintarPares==="function") pintarPares();
+  if(id==="unificar" && typeof pintarFuentesUni==="function") pintarFuentesUni();
 }
 document.querySelectorAll(".nav").forEach(function(b){ b.addEventListener("click", function(){ vista(b.dataset.v); }); });
 document.querySelectorAll("#tabbar button[data-v]").forEach(function(b){ b.addEventListener("click", function(){ vista(b.dataset.v); }); });
@@ -1149,13 +1152,33 @@ document.getElementById("btn-pts-lista").addEventListener("click", function(){
   S.puntosLista=true; guardar(); pintarPuntos(); toast("Puntos calculados con la asistencia de «Pasar lista».");
 });
 
+var UNI_FUENTES=[];
+function copiaFilas(f){ return f.map(function(p){ return Object.assign({}, p); }); }
+function agregarFuenteUni(nombre, filas){
+  UNI_FUENTES=UNI_FUENTES.filter(function(x){ return x.nombre!==nombre; });
+  UNI_FUENTES.push({ nombre:nombre, filas:filas });
+}
+function pintarFuentesUni(){
+  var e=document.getElementById("uni-fuentes");
+  e.textContent = UNI_FUENTES.length
+    ? "Fuentes: "+UNI_FUENTES.map(function(x){ return x.nombre+" ("+x.filas.length+")"; }).join(" · ")
+    : "Todavía no hay fuentes.";
+}
+function recalcularUni(){
+  pintarFuentesUni();
+  if(UNI_FUENTES.length<1){ ULTIMO_UNI=null; document.getElementById("res-uni").innerHTML=""; return; }
+  ULTIMO_UNI=unificar(UNI_FUENTES.map(function(x){ return { nombre:x.nombre, filas:copiaFilas(x.filas) }; }));
+  document.getElementById("res-uni").innerHTML=renderUnificado(ULTIMO_UNI);
+}
 soltar(document.getElementById("zona-uni"), document.getElementById("file-uni"), function(fs){
   Promise.all(fs.map(function(f){ return leer(f).then(function(filas){ return {nombre:f.name, filas:filas}; }); }))
   .then(function(listas){
-    ULTIMO_UNI=unificar(listas);
-    document.getElementById("res-uni").innerHTML=renderUnificado(ULTIMO_UNI);
+    listas.forEach(function(l){ agregarFuenteUni(l.nombre, l.filas); });
+    recalcularUni();
   }).catch(function(e){ toast("No se ha podido leer: "+e.message); });
 }, true);
+document.getElementById("uni-ir-drive").addEventListener("click", function(){ vista("drive"); });
+document.getElementById("uni-limpiar").addEventListener("click", function(){ UNI_FUENTES=[]; recalcularUni(); });
 document.getElementById("res-uni").addEventListener("click", function(e){
   if(!e.target.closest("#btn-usar-uni") || !ULTIMO_UNI) return;
   S.censo=ULTIMO_UNI.unico.map(function(p){ delete p.__f; return p; });
@@ -2073,7 +2096,7 @@ function irListaTab(t){ LT=t; pintarLista(); }
   function estadoHoja(txt, mal){ var e=document.getElementById("hs-estado"); e.textContent=txt; e.style.color = mal ? "var(--carmin)" : ""; }
   document.getElementById("hs-probar").addEventListener("click", function(){
     estadoHoja("Probando…");
-    hojaLlamar("ping").then(function(r){ estadoHoja("Conectado con la hoja «"+(r.hoja||"sin nombre")+"»."); })
+    hojaLlamar("ping").then(function(r){ estadoHoja("Conectado con la hoja «"+(r.hoja||"sin nombre")+"». "+(r.drive ? "Drive: activado." : "Drive: desactivado (actívalo en «Archivo en Drive»).")); })
       .catch(function(err){ estadoHoja(err.message, true); });
   });
   document.getElementById("hs-sync").addEventListener("click", function(){
@@ -2124,6 +2147,482 @@ function irListaTab(t){ LT=t; pintarLista(); }
   window.addEventListener("offline", pintarSync);
   document.addEventListener("visibilitychange", function(){
     if(document.visibilityState==="visible" && hojaConfigurada() && S.ajustes.sheets.auto && !SYNC.trabajando && Date.now()-SYNC.ultimo>60000) sincronizar(true);
+  });
+})();
+
+
+/* ---------- Archivo en Drive ---------- */
+var DRIVE={ listo:null, ruta:[{id:"root",title:"Mi unidad"}], archivos:[], marcados:{}, sel:null, modo:"carpeta",
+            orden:"title", asc:true, dups:{}, lecturas:{}, carpetasCargadas:false };
+var DOCX_MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+var TIPOS_DRIVE={
+  "application/vnd.google-apps.folder":"Carpeta",
+  "application/vnd.google-apps.document":"Documento de Google",
+  "application/vnd.google-apps.spreadsheet":"Hoja de Google",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":"Word",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"Excel",
+  "application/vnd.ms-excel":"Excel",
+  "application/pdf":"PDF","text/csv":"CSV","text/plain":"Texto"
+};
+function esCarpetaD(f){ return f && f.mimeType==="application/vnd.google-apps.folder"; }
+function tipoDrive(m){ return TIPOS_DRIVE[m] || String(m||"").split("/").pop().slice(0,14); }
+function fechaCorta(iso){ return iso ? new Date(iso).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}) : "—"; }
+function tamano(n){
+  if(!n) return "—";
+  if(n<1024) return n+" B";
+  if(n<1048576) return Math.round(n/1024)+" KB";
+  return (n/1048576).toFixed(1).replace(".",",")+" MB";
+}
+function driveChip(txt, ok){
+  var c=document.getElementById("drive-chip"); if(!c) return;
+  c.innerHTML='<span class="punto"></span>'+esc(txt); c.className="chip "+(ok?"real":"demo");
+}
+function driveSrv(accion, datos){ return hojaLlamar(accion, datos); }
+function datosDrive(ids){ return Object.keys(ids||{}).filter(function(k){ return ids[k]; }); }
+function carpetaActual(){ return DRIVE.ruta[DRIVE.ruta.length-1].id; }
+
+function copiarScript(boton){
+  fetch("apps-script/Code.gs").then(function(r){ if(!r.ok) throw new Error(); return r.text(); })
+    .then(function(t){ copiarTexto(t, boton); })
+    .catch(function(){ window.open("apps-script/Code.gs","_blank","noopener"); });
+}
+function avisoDrive(tipo){
+  var a=document.getElementById("drive-aviso"), app=document.getElementById("drive-app");
+  if(tipo==="ok"){ a.innerHTML=""; app.hidden=false; return; }
+  app.hidden=true;
+  if(tipo==="sinhoja"){
+    a.innerHTML='<div class="aviso pasos"><div><b>Primero conecta tu hoja de Google.</b> Drive se usa a través del mismo script. '+
+      '<div class="barra" style="margin:10px 0 0"><button class="btn p" id="drive-ir-ajustes" type="button">Conectar la hoja</button></div></div></div>';
+    return;
+  }
+  var cual = tipo==="antiguo" ? "Tu script de Google es una versión anterior y todavía no incluye Drive." : "El acceso a Drive está desactivado en tu script.";
+  a.innerHTML='<div class="aviso pasos"><div><b>'+cual+'</b> Hay que activarlo una sola vez (2 minutos). Es el permiso que decide qué puede ver la app:'+
+    '<ol>'+
+    '<li>Pulsa <b>Copiar el código del script</b> y pégalo en <b>Extensiones → Apps Script</b>, sustituyendo todo lo anterior.</li>'+
+    '<li><b>Configuración del proyecto (⚙) → Propiedades de la secuencia de comandos → Añadir propiedad</b>: nombre <span class="mono">DRIVE_ACCESO</span>, valor <span class="mono">si</span>.</li>'+
+    '<li><b>Implementar → Gestionar implementaciones → ✏ (editar) → Versión: Nueva versión → Implementar</b>.</li>'+
+    '<li>Google pedirá permiso para ver y gestionar tus archivos de Drive: <i>Revisar permisos → tu cuenta → Avanzado → Ir a… → Permitir</i>.</li>'+
+    '<li>Vuelve aquí y pulsa <b>Comprobar</b>.</li></ol>'+
+    '<p class="nota" style="margin:8px 0">Quien tenga tu clave podrá usar tu Drive desde la app: trata el código de vinculación como una contraseña. Para quitar el acceso, cambia <span class="mono">DRIVE_ACCESO</span> a <span class="mono">no</span>.</p>'+
+    '<div class="barra" style="margin:10px 0 0"><button class="btn" id="drive-copiar-script" type="button">Copiar el código del script</button>'+
+    '<button class="btn p" id="drive-comprobar" type="button">Comprobar</button></div></div></div>';
+}
+function driveComprobar(){
+  if(!hojaConfigurada()){ DRIVE.listo=false; avisoDrive("sinhoja"); driveChip("Sin hoja conectada", false); return Promise.resolve(false); }
+  driveChip("Comprobando…", true);
+  return hojaLlamar("ping").then(function(r){
+    if(!r.version || r.version<2){ DRIVE.listo=false; avisoDrive("antiguo"); driveChip("Script antiguo", false); return false; }
+    if(!r.drive){ DRIVE.listo=false; avisoDrive("off"); driveChip("Drive desactivado", false); return false; }
+    DRIVE.listo=true; avisoDrive("ok"); driveChip("Drive conectado", true); return true;
+  }).catch(function(err){ DRIVE.listo=false; avisoDrive("off"); driveChip("Sin conexión", false); toast(err.message, "mal"); return false; });
+}
+function entrarDrive(){
+  if(DRIVE.listo){ if(!DRIVE.archivos.length) abrirCarpetaD("root","Mi unidad",true); return; }
+  driveComprobar().then(function(ok){ if(ok){ abrirCarpetaD("root","Mi unidad",true); cargarCarpetasD(); } });
+}
+function cargarCarpetasD(){
+  driveSrv("drive_carpetas").then(function(r){
+    var sel=document.getElementById("drive-carpeta");
+    sel.innerHTML='<option value="">Mover a…</option><option value="root">Mi unidad (raíz)</option>'+
+      (r.carpetas||[]).map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.title)+'</option>'; }).join("");
+  }).catch(function(){});
+}
+function ponerLista(archivos, etiqueta){
+  DRIVE.archivos=(archivos||[]).filter(function(f){ return f.mimeType!=="application/vnd.google-apps.shortcut"; });
+  DRIVE.marcados={}; DRIVE.dups={}; DRIVE.sel=null;
+  document.getElementById("drive-detalle").hidden=true;
+  pintarDrive();
+  driveChip(etiqueta||(DRIVE.archivos.length+" elementos"), true);
+}
+function abrirCarpetaD(id, titulo, reiniciar){
+  DRIVE.modo="carpeta";
+  if(reiniciar) DRIVE.ruta=[{id:"root",title:"Mi unidad"}];
+  else {
+    var pos=-1; DRIVE.ruta.forEach(function(c,i){ if(c.id===id) pos=i; });
+    if(pos>=0) DRIVE.ruta=DRIVE.ruta.slice(0,pos+1); else DRIVE.ruta.push({id:id,title:titulo||"Carpeta"});
+  }
+  driveChip("Cargando…", true);
+  return driveSrv("drive_listar", { carpeta:id }).then(function(r){ ponerLista(r.archivos); })
+    .catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
+}
+function refrescarD(){
+  if(DRIVE.modo==="carpeta") return abrirCarpetaD(carpetaActual(), null, false);
+  return buscarD();
+}
+function buscarD(){
+  var q=document.getElementById("drive-q").value.trim(), tipo=document.getElementById("drive-tipo").value;
+  if(!q && tipo==="todo"){ return abrirCarpetaD("root","Mi unidad",true); }
+  DRIVE.modo="busqueda"; driveChip("Buscando…", true);
+  return driveSrv("drive_buscar", { texto:q, tipo:tipo }).then(function(r){
+    ponerLista(r.archivos, (r.archivos||[]).length+" resultados");
+    document.getElementById("drive-ruta").innerHTML='<span class="nota" style="margin:0">Resultados de la búsqueda</span>';
+  }).catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
+}
+function pintarRutaD(){
+  var r=document.getElementById("drive-ruta");
+  if(DRIVE.modo!=="carpeta"){ return; }
+  r.innerHTML=DRIVE.ruta.map(function(c,i){
+    return '<button type="button" data-ruta="'+esc(c.id)+'"'+(i===DRIVE.ruta.length-1?' disabled':'')+'>'+esc(c.title)+'</button>';
+  }).join('<span class="sep">›</span>');
+}
+function pintarDrive(){
+  pintarRutaD();
+  var tb=document.getElementById("drive-tabla");
+  var l=DRIVE.archivos.slice();
+  l.sort(function(a,b){
+    var ca=esCarpetaD(a)?0:1, cb=esCarpetaD(b)?0:1; if(ca!==cb) return ca-cb;
+    var r = DRIVE.orden==="mod" ? String(a.modifiedTime).localeCompare(String(b.modifiedTime)) : String(a.title).localeCompare(String(b.title),"es");
+    return DRIVE.asc ? r : -r;
+  });
+  if(!l.length){ tb.innerHTML='<tbody><tr><td class="vacio">No hay nada aquí.</td></tr></tbody>'; document.getElementById("drive-cuenta").textContent=""; return; }
+  var todos=l.every(function(f){ return DRIVE.marcados[f.id]; });
+  var h='<thead><tr><th style="width:36px"><input type="checkbox" id="drive-marcar-todo" aria-label="Marcar todo"'+(todos?" checked":"")+'></th>'+
+    '<th data-ord="title">Nombre</th><th>Tipo</th><th data-ord="mod">Modificado</th><th class="num">Tamaño</th></tr></thead><tbody>';
+  l.forEach(function(f){
+    h+='<tr data-id="'+esc(f.id)+'"'+(DRIVE.sel&&DRIVE.sel.id===f.id?' class="sel"':'')+'>'+
+      '<td><input type="checkbox" data-marca="'+esc(f.id)+'"'+(DRIVE.marcados[f.id]?" checked":"")+' aria-label="Marcar"></td>'+
+      '<td class="'+(esCarpetaD(f)?'tipo-carpeta':'')+'"><strong>'+esc(f.title)+'</strong>'+(DRIVE.dups[f.id]?' <span class="pill av">repetido</span>':'')+'</td>'+
+      '<td>'+esc(tipoDrive(f.mimeType))+'</td><td>'+fechaCorta(f.modifiedTime)+'</td>'+
+      '<td class="num">'+(esCarpetaD(f)?"":tamano(f.size))+'</td></tr>';
+  });
+  tb.innerHTML=h+"</tbody>";
+  var n=datosDrive(DRIVE.marcados).length;
+  document.getElementById("drive-cuenta").textContent = n ? n+" marcado"+(n>1?"s":"") : DRIVE.archivos.length+" elementos";
+}
+function seleccionarD(f){
+  DRIVE.sel=f;
+  var d=document.getElementById("drive-detalle"); d.hidden=false;
+  document.getElementById("drive-titulo").textContent=f.title;
+  document.getElementById("drive-meta").textContent=tipoDrive(f.mimeType)+" · "+fechaCorta(f.modifiedTime)+" · "+(f.owner||"")+(f.size?" · "+tamano(f.size):"");
+  var a=document.getElementById("drive-abrir"); a.href=f.viewUrl||"#";
+  document.getElementById("drive-est").textContent="";
+  var t=document.getElementById("drive-texto"); t.style.display="none"; t.textContent="";
+  var legible = !esCarpetaD(f);
+  ["drive-leer","drive-renombrar","drive-duplicar","drive-usos"].forEach(function(id){ document.getElementById(id).hidden=!legible && id!=="drive-renombrar"; });
+  pintarDrive();
+  d.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+function nombresRepetidos(){
+  var por={}; DRIVE.archivos.forEach(function(f){ var k=norm(f.title); (por[k]=por[k]||[]).push(f.id); });
+  var out={}; Object.keys(por).forEach(function(k){ if(por[k].length>1) por[k].forEach(function(id){ out[id]=true; }); });
+  return out;
+}
+function leerArchivoD(f){
+  if(DRIVE.lecturas[f.id]) return Promise.resolve(DRIVE.lecturas[f.id]);
+  return driveSrv("drive_leer", { id:f.id }).then(function(r){ DRIVE.lecturas[f.id]=r; return r; });
+}
+function filasDeLectura(r){
+  var mejor=[];
+  function probar(vals){ var p=filasDeHoja(vals); if(p.length>mejor.length) mejor=p; }
+  function libro(wb){ wb.SheetNames.forEach(function(n){ probar(XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:""})); }); }
+  if(typeof XLSX==="undefined" && r.tipo!=="tabla") throw new Error("La librería de hojas de cálculo no ha cargado; recarga la página.");
+  if(r.tipo==="tabla") r.hojas.forEach(function(h){ probar(h.valores); });
+  else if(r.tipo==="binario") libro(XLSX.read(r.base64,{type:"base64"}));
+  else if(r.tipo==="texto") libro(XLSX.read(r.texto,{type:"string"}));
+  else throw new Error("Este tipo de archivo no se puede leer como tabla.");
+  return mejor;
+}
+function estD(t, mal){ var e=document.getElementById("drive-est"); e.textContent=t; e.style.color=mal?"var(--carmin)":""; }
+
+(function(){
+  var tabla=document.getElementById("drive-tabla");
+  document.getElementById("drive-aviso").addEventListener("click", function(e){
+    if(e.target.closest("#drive-ir-ajustes")){ vista("lista"); irListaTab("ajustes"); }
+    else if(e.target.closest("#drive-copiar-script")) copiarScript(e.target.closest("#drive-copiar-script"));
+    else if(e.target.closest("#drive-comprobar")) entrarDrive();
+  });
+  document.getElementById("drive-ruta").addEventListener("click", function(e){
+    var b=e.target.closest("button[data-ruta]"); if(!b) return;
+    abrirCarpetaD(b.dataset.ruta, null, b.dataset.ruta==="root");
+  });
+  document.getElementById("drive-inicio").addEventListener("click", function(){ abrirCarpetaD("root","Mi unidad",true); });
+  document.getElementById("drive-refrescar").addEventListener("click", refrescarD);
+  document.getElementById("drive-buscar").addEventListener("click", buscarD);
+  document.getElementById("drive-q").addEventListener("keydown", function(e){ if(e.key==="Enter") buscarD(); });
+  document.getElementById("drive-tipo").addEventListener("change", buscarD);
+  document.getElementById("drive-recientes").addEventListener("click", function(){
+    DRIVE.modo="busqueda"; driveChip("Cargando…", true);
+    driveSrv("drive_recientes").then(function(r){
+      ponerLista(r.archivos, (r.archivos||[]).length+" recientes");
+      document.getElementById("drive-ruta").innerHTML='<span class="nota" style="margin:0">Archivos modificados en los últimos 45 días</span>';
+    }).catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
+  });
+  document.getElementById("drive-duplicados").addEventListener("click", function(){
+    DRIVE.dups=nombresRepetidos(); var n=Object.keys(DRIVE.dups).length; pintarDrive();
+    toast(n ? n+" archivos con el nombre repetido en esta vista." : "No hay nombres repetidos en esta vista.");
+  });
+  document.getElementById("drive-nueva").addEventListener("click", function(){
+    var nombre=prompt("Nombre de la nueva carpeta:"); if(!nombre) return;
+    var padre = DRIVE.modo==="carpeta" ? carpetaActual() : "root";
+    driveSrv("drive_carpeta_nueva", { nombre:nombre, padre:padre }).then(function(){
+      toast("Carpeta creada."); cargarCarpetasD(); if(DRIVE.modo==="carpeta") abrirCarpetaD(padre, null, padre==="root");
+    }).catch(function(e){ toast(e.message, "mal"); });
+  });
+
+  tabla.addEventListener("change", function(e){
+    var todo=e.target.closest("#drive-marcar-todo");
+    if(todo){ DRIVE.marcados={}; if(todo.checked) DRIVE.archivos.forEach(function(f){ DRIVE.marcados[f.id]=true; }); pintarDrive(); return; }
+    var c=e.target.closest("input[data-marca]"); if(!c) return;
+    DRIVE.marcados[c.dataset.marca]=c.checked;
+    var n=datosDrive(DRIVE.marcados).length;
+    document.getElementById("drive-cuenta").textContent = n ? n+" marcado"+(n>1?"s":"") : DRIVE.archivos.length+" elementos";
+  });
+  tabla.addEventListener("click", function(e){
+    if(e.target.closest("input")) return;
+    var th=e.target.closest("th[data-ord]");
+    if(th){ if(DRIVE.orden===th.dataset.ord) DRIVE.asc=!DRIVE.asc; else { DRIVE.orden=th.dataset.ord; DRIVE.asc=true; } pintarDrive(); return; }
+    var tr=e.target.closest("tr[data-id]"); if(!tr) return;
+    var f=DRIVE.archivos.filter(function(x){ return x.id===tr.dataset.id; })[0]; if(!f) return;
+    if(esCarpetaD(f)) abrirCarpetaD(f.id, f.title, false); else seleccionarD(f);
+  });
+
+  document.getElementById("drive-mover").addEventListener("click", function(){
+    var destino=document.getElementById("drive-carpeta").value;
+    if(!destino){ toast("Elige antes la carpeta de destino."); return; }
+    var ids=datosDrive(DRIVE.marcados); if(!ids.length && DRIVE.sel) ids=[DRIVE.sel.id];
+    if(!ids.length){ toast("Marca los archivos que quieres mover."); return; }
+    driveChip("Moviendo "+ids.length+"…", true);
+    driveSrv("drive_mover", { ids:ids, destino:destino }).then(function(r){
+      driveChip(r.fallos&&r.fallos.length ? r.movidos+" movidos, "+r.fallos.length+" con error" : r.movidos+" movidos", !(r.fallos&&r.fallos.length));
+      refrescarD();
+    }).catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
+  });
+  document.getElementById("drive-papelera").addEventListener("click", function(){
+    var ids=datosDrive(DRIVE.marcados); if(!ids.length && DRIVE.sel) ids=[DRIVE.sel.id];
+    if(!ids.length){ toast("Marca los archivos que quieres enviar a la papelera."); return; }
+    if(!confirm("¿Enviar "+ids.length+" elemento"+(ids.length>1?"s":"")+" a la papelera de Drive? Podrás recuperarlos desde Drive durante 30 días.")) return;
+    driveSrv("drive_papelera", { ids:ids }).then(function(r){
+      driveChip(r.enviados+" enviados a la papelera", true); refrescarD();
+    }).catch(function(e){ toast(e.message, "mal"); });
+  });
+  document.getElementById("drive-lote-aplicar").addEventListener("click", function(){
+    var texto=document.getElementById("drive-lote-buscar").value, nuevo=document.getElementById("drive-lote-reemplazar").value;
+    if(!texto){ toast("Escribe qué parte del nombre hay que buscar."); return; }
+    var ids=datosDrive(DRIVE.marcados); if(!ids.length){ toast("Marca los archivos que quieres renombrar."); return; }
+    var cambios=ids.map(function(id){
+      var f=DRIVE.archivos.filter(function(x){ return x.id===id; })[0];
+      return f && f.title.indexOf(texto)>=0 ? { id:id, title:f.title.split(texto).join(nuevo) } : null;
+    }).filter(Boolean);
+    if(!cambios.length){ toast("Ningún nombre marcado contiene «"+texto+"»."); return; }
+    if(!confirm("Se renombrarán "+cambios.length+" archivos, sustituyendo «"+texto+"» por «"+nuevo+"». ¿Continuar?")) return;
+    driveChip("Renombrando…", true);
+    driveSrv("drive_renombrar", { cambios:cambios }).then(function(r){
+      driveChip(r.fallos&&r.fallos.length ? r.renombrados+" renombrados, "+r.fallos.length+" con error" : r.renombrados+" renombrados", !(r.fallos&&r.fallos.length));
+      document.getElementById("drive-lote-buscar").value=""; document.getElementById("drive-lote-reemplazar").value="";
+      refrescarD();
+    }).catch(function(e){ toast(e.message, "mal"); });
+  });
+
+  document.getElementById("drive-enlace").addEventListener("click", function(){ if(DRIVE.sel) copiarTexto(DRIVE.sel.viewUrl||"", this); });
+  document.getElementById("drive-renombrar").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return;
+    var nuevo=prompt("Nuevo nombre:", f.title); if(!nuevo || nuevo===f.title) return;
+    estD("Renombrando…");
+    driveSrv("drive_renombrar", { cambios:[{ id:f.id, title:nuevo }] }).then(function(r){
+      if(r.fallos && r.fallos.length) throw new Error("No se ha podido renombrar.");
+      f.title=nuevo; document.getElementById("drive-titulo").textContent=nuevo; estD("Renombrado."); refrescarD();
+    }).catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-duplicar").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Duplicando…");
+    driveSrv("drive_copiar", { id:f.id, titulo:f.title+" (copia)" }).then(function(){ estD("Copia creada en la misma carpeta."); refrescarD(); })
+      .catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-leer").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Leyendo…");
+    leerArchivoD(f).then(function(r){
+      var caja=document.getElementById("drive-texto"), txt;
+      if(r.tipo==="texto") txt=r.texto;
+      else if(r.tipo==="tabla") txt=r.hojas.map(function(h){ return "["+h.nombre+"]\n"+h.valores.slice(0,60).map(function(x){ return x.join(" | "); }).join("\n"); }).join("\n\n");
+      else if(r.tipo==="binario"){
+        if(typeof XLSX!=="undefined" && /spreadsheet|excel/.test(r.mimeType)){
+          var wb=XLSX.read(r.base64,{type:"base64"});
+          txt=wb.SheetNames.map(function(n){ return "["+n+"]\n"+XLSX.utils.sheet_to_csv(wb.Sheets[n]).split("\n").slice(0,60).join("\n"); }).join("\n\n");
+        } else txt="(Archivo Word: se puede editar desde «Actualizar este documento».)";
+      } else txt="Este tipo de archivo no se puede mostrar aquí; ábrelo en Drive.";
+      caja.style.display="block"; caja.textContent=txt.slice(0,12000);
+      estD(r.tipo==="no" ? "" : "Contenido leído (vista parcial).");
+    }).catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-usar-censo").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Leyendo…");
+    leerArchivoD(f).then(function(r){
+      var filas=filasDeLectura(r);
+      if(!filas.length){ estD("No he reconocido una tabla de colegiales (hacen falta cabeceras como Apellidos, Nombre, Habitación…).", true); return; }
+      if(S.censo.length && !confirm("Se han leído "+filas.length+" colegiales. ¿Sustituir el censo actual ("+S.censo.length+")?")) { estD(""); return; }
+      S.censo=filas; S.origen="fichero"; S.sel={}; guardar(); pintarCenso();
+      toast(filas.length+" colegiales cargados desde Drive."); vista("censo");
+    }).catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-usar-uni").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Leyendo…");
+    leerArchivoD(f).then(function(r){
+      var filas=filasDeLectura(r);
+      if(!filas.length){ estD("No he reconocido un listado de personas en ese archivo.", true); return; }
+      agregarFuenteUni(f.title, filas); recalcularUni();
+      estD("Añadido a «Unificar listados» ("+filas.length+" personas). Puedes elegir más archivos."); toast("Añadido a Unificar listados.");
+    }).catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-usar-pts").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Leyendo…");
+    leerArchivoD(f).then(function(r){
+      var con=filasDeLectura(r).filter(function(p){ return p.puntos!==""; });
+      if(!con.length){ estD("No he encontrado una columna de puntos (TOTAL) en ese archivo.", true); return; }
+      S.puntos=con; S.puntosLista=false; guardar(); pintarPuntos(); toast("Puntos cargados desde Drive."); vista("puntos");
+    }).catch(function(e){ estD(e.message, true); });
+  });
+  document.getElementById("drive-usar-doc").addEventListener("click", function(){
+    var f=DRIVE.sel; if(!f) return; estD("Preparando el documento…");
+    cargarDocDesdeDrive(f).then(function(){ estD(""); vista("actualizar"); }).catch(function(e){ estD(e.message, true); });
+  });
+})();
+
+/* ---------- Actualizar documentos (buscar y reemplazar) ---------- */
+var DOC=null, PARES=[{b:"",r:""}];
+function escXml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function desXml(s){ return String(s).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,"&"); }
+function paresValidos(){ return PARES.filter(function(p){ return p.b; }); }
+/* sustituye en el XML de Word respetando que el texto de un párrafo puede estar partido en varios trozos */
+function reemplazarXml(xml, buscar, nuevo){
+  var veces=0;
+  var out=xml.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, function(p){
+    var re=/(<w:t(?: [^>]*)?>)([\s\S]*?)(<\/w:t>)/g, m, runs=[];
+    while((m=re.exec(p))) runs.push({ ini:m.index, largo:m[0].length, abre:m[1], txt:desXml(m[2]), cierra:m[3] });
+    if(!runs.length) return p;
+    var total=runs.map(function(r){ return r.txt; }).join("");
+    var idx=total.lastIndexOf(buscar), cambiado=false;
+    while(idx>=0){
+      var fin=idx+buscar.length, pos=0, puesto=false;
+      for(var i=0;i<runs.length;i++){
+        var a=pos, b=pos+runs[i].txt.length; pos=b;
+        if(!(a<fin && b>idx)) continue;
+        var desde=Math.max(idx,a)-a, hasta=Math.min(fin,b)-a;
+        if(!puesto){ runs[i].txt=runs[i].txt.slice(0,desde)+nuevo+runs[i].txt.slice(hasta); puesto=true; }
+        else runs[i].txt=runs[i].txt.slice(0,desde)+runs[i].txt.slice(hasta);
+      }
+      veces++; cambiado=true;
+      total=runs.map(function(r){ return r.txt; }).join("");
+      idx = idx>0 ? total.lastIndexOf(buscar, idx-1) : -1;
+    }
+    if(!cambiado) return p;
+    for(var k=runs.length-1;k>=0;k--){
+      var r=runs[k], abre=/xml:space=/.test(r.abre) ? r.abre : r.abre.replace(/^<w:t/, '<w:t xml:space="preserve"');
+      p=p.slice(0,r.ini)+abre+escXml(r.txt)+r.cierra+p.slice(r.ini+r.largo);
+    }
+    return p;
+  });
+  return { xml:out, veces:veces };
+}
+function contarEn(texto, buscar){ return buscar ? texto.split(buscar).length-1 : 0; }
+
+function cargarDocDesdeDrive(f){
+  return leerArchivoD(f).then(function(r){
+    if(f.mimeType==="application/vnd.google-apps.document"){
+      DOC={ origen:"drive", id:f.id, nombre:f.title, tipo:"gdoc", texto:r.texto||"", padre:f.parentId }; return;
+    }
+    if(r.tipo==="binario" && /wordprocessingml/.test(r.mimeType)){
+      if(typeof JSZip==="undefined") throw new Error("La librería de Word no ha cargado; recarga la página.");
+      return JSZip.loadAsync(r.base64,{base64:true}).then(function(zip){
+        DOC={ origen:"drive", id:f.id, nombre:f.title, tipo:"docx", zip:zip, padre:f.parentId };
+      });
+    }
+    if(r.tipo==="texto"){ DOC={ origen:"drive", id:f.id, nombre:f.title, tipo:"txt", texto:r.texto, padre:f.parentId }; return; }
+    throw new Error("Aquí se pueden actualizar documentos de Google, Word (.docx) y texto.");
+  });
+}
+function pintarPares(){
+  var d=document.getElementById("doc-detalle"), n=document.getElementById("doc-nombre");
+  if(DOC){
+    n.textContent=DOC.nombre;
+    d.textContent=({gdoc:"Documento de Google",docx:"Word (.docx)",txt:"Texto"})[DOC.tipo]+(DOC.origen==="drive"?" · de Drive":" · de este dispositivo");
+  } else { n.textContent=""; d.textContent="Ningún documento elegido. En Drive, abre el archivo y pulsa «Actualizar este documento»."; }
+  document.getElementById("doc-pares").innerHTML=PARES.map(function(p,i){
+    return '<div class="par-fila" data-i="'+i+'"><input data-c="b" value="'+esc(p.b)+'" placeholder="Texto que hay que cambiar (ej.: 2024-2025)" aria-label="Buscar">'+
+      '<input data-c="r" value="'+esc(p.r)+'" placeholder="Nuevo texto (ej.: 2025-2026)" aria-label="Reemplazar por">'+
+      '<button class="x" type="button" data-q="'+i+'" aria-label="Quitar" style="border:1px solid var(--linea-fuerte); background:none; border-radius:8px; width:36px; height:36px; cursor:pointer; color:var(--ink-faint)">✕</button></div>';
+  }).join("");
+}
+function estDoc(t, mal){ var e=document.getElementById("doc-estado"); e.textContent=t; e.style.color=mal?"var(--carmin)":""; }
+(function(){
+  document.getElementById("doc-pares").addEventListener("input", function(e){
+    var fila=e.target.closest(".par-fila"), c=e.target.dataset.c; if(!fila||!c) return;
+    PARES[+fila.dataset.i][c]=e.target.value;
+  });
+  document.getElementById("doc-pares").addEventListener("click", function(e){
+    var q=e.target.closest("button[data-q]"); if(!q) return;
+    PARES.splice(+q.dataset.q,1); if(!PARES.length) PARES=[{b:"",r:""}]; pintarPares();
+  });
+  document.getElementById("doc-mas").addEventListener("click", function(){ PARES.push({b:"",r:""}); pintarPares(); });
+  document.getElementById("doc-ir-drive").addEventListener("click", function(){ vista("drive"); });
+  document.getElementById("doc-local").addEventListener("click", function(){ document.getElementById("doc-file").click(); });
+  document.getElementById("doc-file").addEventListener("change", function(){
+    var f=this.files[0]; this.value=""; if(!f) return;
+    if(/\.docx$/i.test(f.name)){
+      if(typeof JSZip==="undefined"){ estDoc("La librería de Word no ha cargado; recarga la página.", true); return; }
+      f.arrayBuffer().then(function(b){ return JSZip.loadAsync(b); }).then(function(zip){
+        DOC={ origen:"local", nombre:f.name, tipo:"docx", zip:zip }; pintarPares(); estDoc("");
+      }).catch(function(){ estDoc("Ese archivo no es un Word válido.", true); });
+    } else {
+      f.text().then(function(t){ DOC={ origen:"local", nombre:f.name, tipo:"txt", texto:t }; pintarPares(); estDoc(""); });
+    }
+  });
+  function partesDocx(zip){ return Object.keys(zip.files).filter(function(n){ return /^word\/(document|header\d*|footer\d*)\.xml$/.test(n); }); }
+  document.getElementById("doc-probar").addEventListener("click", function(){
+    if(!DOC){ estDoc("Elige primero un documento.", true); return; }
+    var pares=paresValidos(); if(!pares.length){ estDoc("Escribe al menos un texto que cambiar.", true); return; }
+    if(DOC.tipo==="docx"){
+      estDoc("Contando…");
+      Promise.all(partesDocx(DOC.zip).map(function(n){ return DOC.zip.file(n).async("string"); })).then(function(xmls){
+        estDoc(pares.map(function(p){
+          var v=0; xmls.forEach(function(x){ v+=reemplazarXml(x,p.b,p.r).veces; });
+          return "«"+p.b+"»: "+v+(v===1?" coincidencia":" coincidencias");
+        }).join(" · "));
+      });
+    } else {
+      estDoc(pares.map(function(p){ var v=contarEn(DOC.texto,p.b); return "«"+p.b+"»: "+v+(v===1?" coincidencia":" coincidencias"); }).join(" · "));
+    }
+  });
+  document.getElementById("doc-guardar").addEventListener("click", function(){
+    if(!DOC){ estDoc("Elige primero un documento.", true); return; }
+    var pares=paresValidos(); if(!pares.length){ estDoc("Escribe al menos un texto que cambiar.", true); return; }
+    var boton=this; boton.disabled=true; estDoc("Aplicando cambios…");
+    var fin=function(){ boton.disabled=false; };
+    var base=DOC.nombre.replace(/\.[^.]+$/,"");
+    if(DOC.tipo==="gdoc"){
+      driveSrv("drive_reemplazar_doc", { id:DOC.id, pares:pares.map(function(p){ return {buscar:p.b, reemplazar:p.r}; }), copia:true, titulo:DOC.nombre+" (corregido)" })
+        .then(function(r){
+          var tot=(r.resumen||[]).reduce(function(s,x){ return s+x.veces; },0);
+          estDoc("Copia creada en Drive: «"+DOC.nombre+" (corregido)» · "+tot+" cambios.");
+        }).catch(function(e){ estDoc(e.message, true); }).then(fin);
+      return;
+    }
+    if(DOC.tipo==="docx"){
+      var total=0, zip=DOC.zip;
+      Promise.all(partesDocx(zip).map(function(n){
+        return zip.file(n).async("string").then(function(x){
+          pares.forEach(function(p){ var r=reemplazarXml(x,p.b,p.r); x=r.xml; total+=r.veces; });
+          zip.file(n, x);
+        });
+      })).then(function(){ return zip.generateAsync({type:"base64", compression:"DEFLATE"}); }).then(function(b64){
+        var titulo=base+" (corregido).docx";
+        if(DOC.origen==="drive"){
+          return driveSrv("drive_crear", { title:titulo, base64:b64, mimeType:DOCX_MIME, padre:DOC.padre||"root" })
+            .then(function(){ estDoc("Copia creada en Drive: «"+titulo+"» · "+total+" cambios."); });
+        }
+        return zip.generateAsync({type:"blob"}).then(function(blob){ descargarBlob(blob, titulo); estDoc("Copia descargada: «"+titulo+"» · "+total+" cambios."); });
+      }).catch(function(e){ estDoc(e.message||"No se ha podido guardar.", true); }).then(fin);
+      return;
+    }
+    var t=DOC.texto, tot=0;
+    pares.forEach(function(p){ tot+=contarEn(t,p.b); t=t.split(p.b).join(p.r); });
+    var titulo2=base+" (corregido).txt";
+    if(DOC.origen==="drive"){
+      driveSrv("drive_crear", { title:titulo2, texto:t, mimeType:"text/plain", padre:DOC.padre||"root" })
+        .then(function(){ estDoc("Copia creada en Drive: «"+titulo2+"» · "+tot+" cambios."); })
+        .catch(function(e){ estDoc(e.message, true); }).then(fin);
+    } else {
+      descargarBlob(new Blob([t],{type:"text/plain"}), titulo2); estDoc("Copia descargada · "+tot+" cambios."); fin();
+    }
   });
 })();
 
