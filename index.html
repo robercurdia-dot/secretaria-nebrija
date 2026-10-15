@@ -80,6 +80,7 @@
     <div class="grupo">
       <div class="et">Inscripciones</div>
       <button class="nav" data-v="clupik"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3v14"/></svg>Clubes → Clupik</button>
+      <button class="nav" data-v="auto"><svg viewBox="0 0 20 20"><path d="M4 4h12v8H4zM7 16h6M10 12v4M7 8l2 1.5L7 11M11 11h2"/></svg>Automatización</button>
     </div>
 
     <div class="rail-pie">
@@ -776,6 +777,17 @@
           <p class="nota" id="clupik-estado"></p>
         </div>
 
+
+        <div class="panel" style="margin-bottom:16px" id="clupik-auto">
+          <h3>Altas automáticas</h3>
+          <p class="nota" style="margin:0 0 10px">Un navegador automático entra en Clupik por ti (sin Chrome ni tu móvil) y aplica las reglas de arriba. Primero <b>comprueba</b> —no crea nada— y revisa el resultado; después <b>da de alta</b> lo que falte. Hace falta tener configurada la <a href="#auto" data-ir-auto>automatización</a>.</p>
+          <div class="barra" style="margin-bottom:0">
+            <button class="btn" id="btn-clupik-auto-comprobar" type="button">Comprobar en Clupik (no crea nada)</button>
+            <button class="btn p" id="btn-clupik-auto-alta" type="button">Dar de alta lo pendiente</button>
+          </div>
+          <p class="nota" id="clupik-auto-estado" aria-live="polite"></p>
+        </div>
+
       <div class="tarjetas" id="tarjetas-clupik"></div>
 
       <div class="barra">
@@ -786,7 +798,33 @@
       </div>
 
       <div class="caja"><div class="tablawrap"><table class="cards" id="tabla-clupik"></table></div></div>
-      <p class="nota">Esta página solo ordena y prepara los datos: no entra en Clupik por ti. Pásale esta lista, fila a fila, a quien vaya a hacer las altas y actualiza el estado según lo que encuentre.</p>
+      <p class="nota">Sin la automatización, esta página solo ordena y prepara los datos: pásale la lista, fila a fila, a quien vaya a hacer las altas y actualiza el estado según lo que encuentre.</p>
+    </section>
+
+    <!-- ================= AUTOMATIZACIÓN ================= -->
+    <section class="vista" id="v-auto">
+      <div class="cabecera"><div>
+        <h1>Automatización</h1>
+        <p>Tareas que hace un navegador automático en un repositorio privado de GitHub —por ejemplo, las altas en Clupik— sin que tengas que abrir Chrome. Los datos viajan solo entre la app, tu hoja de Google y el ejecutor.</p>
+      </div>
+      <div class="estado"><span class="chip demo" id="auto-chip"><span class="punto"></span>Sin conectar</span></div></div>
+
+      <div id="auto-aviso"></div>
+
+      <div id="auto-app" hidden>
+        <div class="panel" style="margin-bottom:16px">
+          <h3>Ahora mismo</h3>
+          <p class="nota" id="auto-actual" aria-live="polite" style="margin:0 0 10px">No hay ninguna tarea en marcha.</p>
+          <div class="barra" style="margin-bottom:0">
+            <button class="btn p" id="auto-probar" type="button">Probar el ejecutor</button>
+            <button class="btn" id="auto-refrescar" type="button">Actualizar lista</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Últimas tareas</h3>
+          <div id="auto-lista" class="auto-lista"><p class="nota">Aún no hay tareas.</p></div>
+        </div>
+      </div>
     </section>
   </main>
 </div>

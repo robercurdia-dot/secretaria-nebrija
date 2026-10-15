@@ -493,3 +493,15 @@ details.como ol{padding-left:20px; margin:8px 0; font-size:13px; color:var(--ink
 
 .aviso.pasos{background:var(--oro-suave); border-color:transparent; color:var(--ink)}
 .aviso.pasos li{margin:3px 0}
+
+/* ---------- automatización ---------- */
+.auto-lista{display:flex; flex-direction:column}
+.auto-fila{display:grid; grid-template-columns:auto 1fr auto; gap:4px 12px; align-items:baseline; padding:9px 0; border-top:1px solid var(--linea); font-size:13px}
+.auto-fila:first-child{border-top:0}
+.auto-fila .t{font-weight:600}
+.auto-fila .f{color:var(--ink-soft); font-size:12px; font-variant-numeric:tabular-nums}
+.auto-fila .m{grid-column:1 / -1; color:var(--ink-soft); font-size:12.5px}
+.etq{display:inline-block; justify-self:start; padding:2px 8px; border-radius:999px; font-size:11.5px; background:var(--surface-2, var(--surface)); border:1px solid var(--linea)}
+.etq.ok{background:var(--verde-suave); color:var(--verde); border-color:transparent}
+.etq.mal{background:var(--carmin-suave); color:var(--carmin); border-color:transparent}
+.etq.run{background:var(--oro-suave); color:var(--oro); border-color:transparent}

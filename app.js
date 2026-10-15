@@ -1047,6 +1047,7 @@ function vista(id){
   try{ history.replaceState(null,"","#"+id); }catch(e){}
   if(id==="lista") pintarLista();
   if(id==="drive" && typeof entrarDrive==="function") entrarDrive();
+  if(id==="auto" && typeof entrarAuto==="function") entrarAuto();
   if(id==="actualizar" && typeof pintarPares==="function") pintarPares();
   if(id==="unificar" && typeof pintarFuentesUni==="function") pintarFuentesUni();
 }
@@ -2775,6 +2776,170 @@ document.getElementById("q-preset").addEventListener("change", function(){
   actualizarCartel();
 });
 
+
+/* ---------- automatización: tareas con navegador en GitHub ---------- */
+var AUTO={ listo:null, actual:null, timer:null, fallos:0 };
+var AUTO_CLAVE="nebrija-auto-actual";
+var AUTO_APLICAR={};
+var AUTO_ETIQUETA={ en_cola:["En cola","run"], ejecutando:["Ejecutando","run"], ok:["Terminada","ok"], error:["Con error","mal"] };
+function autoChip(txt, ok){
+  var c=document.getElementById("auto-chip"); if(!c) return;
+  c.innerHTML='<span class="punto"></span>'+esc(txt); c.className="chip "+(ok?"real":"demo");
+}
+function autoAviso(tipo){
+  var a=document.getElementById("auto-aviso"), app=document.getElementById("auto-app");
+  if(tipo==="ok"){ a.innerHTML=""; app.hidden=false; return; }
+  app.hidden=true;
+  if(tipo==="sinhoja"){
+    a.innerHTML='<div class="aviso oro"><span class="punto" style="margin-top:7px"></span><div><b>Primero conecta tu hoja de Google.</b> La automatización usa el mismo script que Pasar lista y Drive.'+
+      '<div class="barra" style="margin:10px 0 0"><button class="btn p" id="auto-ir-ajustes" type="button">Conectar la hoja</button></div></div></div>';
+    return;
+  }
+  var cual = tipo==="antiguo" ? "Tu script de Google es una versión anterior y no incluye la automatización." : "La automatización todavía no está configurada en tu script.";
+  a.innerHTML='<div class="aviso pasos"><div><b>'+cual+'</b> Se configura una sola vez:'+
+    '<ol>'+
+    '<li>Crea en GitHub un repositorio <b>privado</b> con el ejecutor (la guía del proyecto explica cómo) y un token que solo pueda lanzar sus tareas.</li>'+
+    '<li>Pulsa <b>Copiar el código del script</b> y pégalo en <b>Extensiones → Apps Script</b>, sustituyendo todo lo anterior.</li>'+
+    '<li>En <b>Configuración del proyecto (⚙) → Propiedades</b> añade <span class="mono">GH_REPO</span> (usuario/repositorio), <span class="mono">GH_TOKEN</span> (el token) y <span class="mono">CLAVE_AUTO</span> (una clave nueva, distinta de CLAVE).</li>'+
+    '<li><b>Implementar → Gestionar implementaciones → ✏ → Nueva versión → Implementar</b>.</li>'+
+    '<li>En el repositorio privado, <b>Settings → Secrets and variables → Actions</b>: <span class="mono">APPS_SCRIPT_URL</span>, <span class="mono">CLAVE_AUTO</span> (la misma) y las credenciales de las webs que vaya a usar (Clupik).</li>'+
+    '<li>Vuelve aquí y pulsa <b>Comprobar</b>.</li></ol>'+
+    '<p class="nota" style="margin:8px 0"><span class="mono">CLAVE_AUTO</span> solo sirve para que el ejecutor recoja su encargo y devuelva el resultado; no da acceso a tu hoja ni a tu Drive.</p>'+
+    '<div class="barra" style="margin:10px 0 0"><button class="btn" id="auto-copiar-script" type="button">Copiar el código del script</button>'+
+    '<button class="btn p" id="auto-comprobar" type="button">Comprobar</button></div></div></div>';
+}
+function autoComprobar(){
+  if(!hojaConfigurada()){ AUTO.listo=false; autoAviso("sinhoja"); autoChip("Sin hoja conectada", false); return Promise.resolve(false); }
+  autoChip("Comprobando…", true);
+  return hojaLlamar("ping").then(function(r){
+    if(!r.version || r.version<3){ AUTO.listo=false; autoAviso("antiguo"); autoChip("Script antiguo", false); return false; }
+    if(!r.auto){ AUTO.listo=false; autoAviso("off"); autoChip("Sin configurar", false); return false; }
+    AUTO.listo=true; autoAviso("ok"); autoChip("Automatización lista", true); return true;
+  }).catch(function(err){ AUTO.listo=false; autoAviso("off"); autoChip("Sin conexión", false); toast(err.message, "mal"); return false; });
+}
+function entrarAuto(){
+  autoComprobar().then(function(ok){ if(ok) autoListar(); });
+  autoPintarActual();
+}
+function autoFecha(ms){
+  if(!ms) return "";
+  try{ return new Date(ms).toLocaleString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; }
+}
+function autoListar(){
+  return hojaLlamar("auto_lista").then(function(r){
+    var el=document.getElementById("auto-lista"), l=r.trabajos||[];
+    if(!l.length){ el.innerHTML='<p class="nota">Aún no hay tareas.</p>'; return; }
+    el.innerHTML=l.map(function(t){
+      var e=AUTO_ETIQUETA[t.estado]||[t.estado,""];
+      return '<div class="auto-fila"><span class="t">'+esc(t.tarea)+'</span><span class="etq '+e[1]+'">'+esc(e[0])+'</span><span class="f">'+esc(autoFecha(t.creado))+'</span>'+
+             '<span class="m">'+esc(t.mensaje||"")+'</span></div>';
+    }).join("");
+  }).catch(function(e){ toast(e.message, "mal"); });
+}
+function autoTexto(texto, tarea){
+  var ids=["auto-actual"]; if(tarea && AUTO_UI[tarea]) ids.push(AUTO_UI[tarea]);
+  ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent=texto; });
+}
+var AUTO_UI={ clupik:"clupik-auto-estado" };
+function autoPintarActual(){
+  if(!AUTO.actual){ return; }
+  autoTexto("Tarea «"+AUTO.actual.tarea+"» en marcha…", AUTO.actual.tarea);
+}
+function autoGuardarActual(){
+  try{ if(AUTO.actual) localStorage.setItem(AUTO_CLAVE, JSON.stringify(AUTO.actual)); else localStorage.removeItem(AUTO_CLAVE); }catch(e){}
+}
+function autoLanzar(tarea, encargo){
+  if(AUTO.actual){ toast("Ya hay una tarea en marcha: espera a que termine.", "mal"); return Promise.resolve(false); }
+  if(!hojaConfigurada()){ toast("Primero conecta la hoja de Google (Ajustes).", "mal"); return Promise.resolve(false); }
+  autoTexto("Enviando el encargo…", tarea);
+  return hojaLlamar("auto_lanzar", { tarea:tarea, encargo:encargo }).then(function(r){
+    AUTO.actual={ id:r.id, tarea:tarea, inicio:Date.now() }; AUTO.fallos=0; autoGuardarActual();
+    autoTexto("Encargo enviado. Esperando al ejecutor…", tarea);
+    autoSeguir();
+    return true;
+  }).catch(function(e){ autoTexto("No se pudo lanzar: "+e.message, tarea); toast(e.message, "mal"); return false; });
+}
+function autoSeguir(){
+  clearTimeout(AUTO.timer);
+  if(!AUTO.actual) return;
+  var act=AUTO.actual;
+  AUTO.timer=setTimeout(function(){
+    hojaLlamar("auto_estado", { id:act.id }).then(function(r){
+      AUTO.fallos=0;
+      var t=r.trabajo, seg=Math.round((Date.now()-act.inicio)/1000);
+      if(t.estado==="ok" || t.estado==="error"){ autoTerminada(t); return; }
+      var txt = t.estado==="en_cola"
+        ? (seg>120 ? "GitHub aún no ha arrancado el ejecutor ("+seg+" s). Suele tardar menos de un minuto; si pasa de cinco, revisa la pestaña Actions del repositorio privado." : "En cola, esperando a que GitHub arranque el ejecutor…")
+        : (t.mensaje||"Ejecutando…")+" ("+seg+" s)";
+      autoTexto(txt, act.tarea);
+      if(seg>900){ autoTexto("La tarea sigue sin terminar tras 15 minutos. Mira la lista de tareas más tarde.", act.tarea); AUTO.actual=null; autoGuardarActual(); return; }
+      autoSeguir();
+    }).catch(function(){
+      AUTO.fallos++;
+      if(AUTO.fallos>=6){ autoTexto("Se ha perdido la conexión con la hoja. Vuelve a abrir esta página para seguir la tarea.", act.tarea); return; }
+      autoSeguir();
+    });
+  }, 4000);
+}
+function autoTerminada(t){
+  var tarea=t.tarea;
+  AUTO.actual=null; autoGuardarActual();
+  autoTexto((t.estado==="ok" ? "Terminada: " : "Error: ")+(t.mensaje||""), tarea);
+  try{ if(AUTO_APLICAR[tarea]) AUTO_APLICAR[tarea](t); }catch(e){ toast("No se pudo aplicar el resultado: "+e.message, "mal"); }
+  if(document.getElementById("v-auto").classList.contains("on")) autoListar();
+}
+function autoReanudar(){
+  var raw=null; try{ raw=localStorage.getItem(AUTO_CLAVE); }catch(e){}
+  if(!raw || !hojaConfigurada()) return;
+  try{ var a=JSON.parse(raw); if(a && a.id && Date.now()-a.inicio<900000){ AUTO.actual=a; autoSeguir(); autoPintarActual(); } else { localStorage.removeItem(AUTO_CLAVE); } }catch(e){}
+}
+
+AUTO_APLICAR.prueba=function(t){
+  if(t.estado==="ok") toast("Prueba superada: el ejecutor funciona.");
+};
+AUTO_APLICAR.clupik=function(t){
+  if(t.estado!=="ok"){ toast("Clupik: "+(t.mensaje||"la tarea ha fallado"), "mal"); return; }
+  var res=(t.resultado && t.resultado.personas) || [], por={}, validos=CLUPIK_ESTADOS.map(function(e){ return e[0]; });
+  S.clupik.forEach(function(p){ if(p.uid) por[p.uid]=p; });
+  var n=0, errores=0;
+  res.forEach(function(r){
+    var p=por[r.id]; if(!p) return;
+    n++;
+    if(r.estado==="error"){ errores++; p.notas="Error automático: "+String(r.notas||"sin detalle").slice(0,160); return; }
+    if(validos.indexOf(r.estado)>=0) p.estado=r.estado;
+    p.notas = r.notas ? String(r.notas).slice(0,200) : p.notas;
+  });
+  guardar(); pintarClupik();
+  toast("Clupik: "+n+" fichas actualizadas"+(errores? ", "+errores+" con error (mira las notas)." : "."), errores?"mal":undefined);
+};
+
+function clupikEncargo(accion){
+  var pend=S.clupik.filter(function(p){ return p.estado!=="confirmada" && p.estado!=="existente_con"; });
+  var sinDni=pend.filter(function(p){ return !(p.dni||"").trim(); }).length;
+  var lista=pend.filter(function(p){ return (p.dni||"").trim() && p.nom.trim(); });
+  return { lista:lista, sinDni:sinDni, encargo:{
+    accion:accion, temporada:CLUPIK_TEMP, tipo:CLUPIK_TIPO,
+    emailNuevos:(document.getElementById("clupik-email").value||"").trim(),
+    personas:lista.map(function(p){
+      if(!p.uid) p.uid=uid();
+      var m=clupikModalidad(p);
+      return { id:p.uid, a1:titulo(p.a1), a2:titulo(p.a2||""), nom:titulo(p.nom), dni:(p.dni||"").trim(), fnac:p.fnac||"",
+               genero:p.genero==="F"?"F":"M", modalidad:{ id:m.id, disciplina:m.disciplina, club:m.club }, estado:p.estado };
+    }) } };
+}
+function clupikAuto(accion){
+  var info=clupikEncargo(accion), est=document.getElementById("clupik-auto-estado");
+  if(!info.lista.length){ est.textContent= info.sinDni ? "Las fichas pendientes no tienen DNI: complétalo para poder buscarlas en Clupik." : "No hay fichas pendientes."; return; }
+  if(accion==="alta"){
+    if(info.encargo.emailNuevos.indexOf("@")<0){ est.textContent="Indica arriba el correo fijo para los perfiles nuevos antes de dar de alta."; return; }
+    if(!confirm("Se van a procesar "+info.lista.length+" personas en Clupik: se crearán perfiles y licencias donde falten, siguiendo las reglas acordadas. ¿Continuar?")) return;
+  }
+  guardar();
+  autoLanzar("clupik", info.encargo).then(function(ok){
+    if(ok && info.sinDni) est.textContent+=" ("+info.sinDni+" fichas sin DNI no se envían.)";
+  });
+}
+
 var hashVinc=(location.hash||"").match(/^#vincular=(.+)$/);
 cargar();
 restaurarCampos();
@@ -2793,5 +2958,23 @@ if(hashVinc){
     (S.censo.length ? Promise.resolve() : censoDesdeHoja(true)).then(function(){ return sincronizar(true); });
   }, 1200);
 }
+
+
+(function(){
+  var aviso=document.getElementById("auto-aviso");
+  aviso.addEventListener("click", function(e){
+    if(e.target.closest("#auto-ir-ajustes")){ vista("lista"); irListaTab("ajustes"); }
+    else if(e.target.closest("#auto-copiar-script")) copiarScript(e.target.closest("#auto-copiar-script"));
+    else if(e.target.closest("#auto-comprobar")) entrarAuto();
+  });
+  document.getElementById("auto-probar").addEventListener("click", function(){ autoLanzar("prueba", {}); });
+  document.getElementById("auto-refrescar").addEventListener("click", autoListar);
+  document.getElementById("btn-clupik-auto-comprobar").addEventListener("click", function(){ clupikAuto("comprobar"); });
+  document.getElementById("btn-clupik-auto-alta").addEventListener("click", function(){ clupikAuto("alta"); });
+  document.getElementById("v-clupik").addEventListener("click", function(e){
+    var a=e.target.closest("a[data-ir-auto]"); if(a){ e.preventDefault(); vista("auto"); }
+  });
+})();
+setTimeout(autoReanudar, 1500);
 
 })();

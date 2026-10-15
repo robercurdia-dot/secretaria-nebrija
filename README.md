@@ -85,9 +85,27 @@ Esta versión es independiente de Claude, así que no incluye lo que dependía d
 
 Los datos que antes venían incluidos (firma del certificado, enlaces de los carteles, correo de Clupik) ahora se escriben una vez en cada campo y se recuerdan en el dispositivo.
 
+## Automatización con navegador (opcional)
+
+Para tareas que hoy se hacen a mano en una web —como las altas en Clupik— la app puede encargárselas a un **navegador automático** que corre en GitHub Actions, en un **repositorio privado aparte** (este es público y no debe tocar datos personales). El circuito:
+
+1. La app envía el encargo al **Apps Script** (mismo vínculo que Pasar lista y Drive).
+2. El Apps Script lo guarda en la pestaña *Automatización* de tu hoja y despierta el ejecutor en GitHub (solo le pasa un identificador, nunca datos).
+3. El ejecutor recoge el encargo con su propia clave (`CLAVE_AUTO`), abre un navegador, hace la tarea y devuelve el resultado.
+4. La app lo muestra y actualiza las fichas. Al terminar, el encargo se borra de la hoja.
+
+Configuración (una vez; el paso a paso está en la vista **Automatización** de la app y en el `README` del repositorio privado):
+
+- Repositorio privado con el ejecutor (`.github/workflows/tarea.yml`, `runner.js`, `tareas/`).
+- Un token de GitHub de grano fino limitado a ese repositorio, con permiso **Actions: lectura y escritura**.
+- Propiedades del script: `GH_REPO`, `GH_TOKEN` y `CLAVE_AUTO` (una clave distinta de `CLAVE`: solo permite recoger el encargo y devolver el resultado).
+- Secretos del repositorio privado: `APPS_SCRIPT_URL`, `CLAVE_AUTO` y las credenciales de cada web (`CLUPIK_USER`, `CLUPIK_PASS`).
+
+Las contraseñas solo viven en los secretos de GitHub; nunca en la app, en la hoja ni en este repositorio. Cada tarea nueva es un fichero en `tareas/` del repositorio privado.
+
 ## Publicar cambios
 
-Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v5` → `secretaria-v6`) para que los móviles descarguen la versión nueva.
+Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v6` → `secretaria-v7`) para que los móviles descarguen la versión nueva.
 
 ## Estructura
 
