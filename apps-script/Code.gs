@@ -20,27 +20,38 @@
  *   añade además la propiedad  DRIVE_ACCESO = si  y vuelve a implementar el script
  *   (Google te pedirá un permiso nuevo, solo la primera vez). Quien tenga la CLAVE
  *   tendrá entonces acceso a tu Drive: trátala como una contraseña.
+ *
+ * AUTOMATIZACIÓN (opcional): tareas que hace un navegador automático en un repositorio
+ * privado de GitHub (por ejemplo, dar de alta personas en Clupik). Propiedades:
+ *   GH_TOKEN    · token de GitHub limitado a ese repositorio (permiso Actions: lectura y escritura)
+ *   GH_REPO     · usuario/repositorio (p. ej. robercurdia-dot/nebrija-automatizacion)
+ *   CLAVE_AUTO  · una segunda clave, distinta de CLAVE, que solo sirve para que el ejecutor
+ *                 recoja el encargo y devuelva el resultado (no da acceso a nada más)
+ *   GH_WORKFLOW · (opcional) nombre del flujo; por defecto tarea.yml
  */
-var VERSION_SCRIPT = 2;
+var VERSION_SCRIPT = 3;
 
 var HOJAS = {
   censo: "Censo",
   categorias: "Categorías",
   sesiones: "Sesiones",
   asistencia: "Asistencia",
-  totales: "Totales"
+  totales: "Totales",
+  auto: "Automatización"
 };
 var CABECERAS = {
   censo: ["Apellido 1", "Apellido 2", "Nombre", "Teléfono", "Habitación", "DNI", "Email", "Estudios"],
   categorias: ["Id", "Nombre", "Puntos", "Modificado", "Borrada"],
   sesiones: ["Id", "Fecha", "CategoríaId", "Categoría", "Título", "Modificado", "Borrada"],
-  asistencia: ["SesiónId", "Fecha", "Categoría", "Título", "Clave", "Apellidos", "Nombre", "Habitación", "Estado", "Puntos"]
+  asistencia: ["SesiónId", "Fecha", "Categoría", "Título", "Clave", "Apellidos", "Nombre", "Habitación", "Estado", "Puntos"],
+  auto: ["Id", "Tarea", "Estado", "Creado", "Actualizado", "Mensaje", "Encargo", "Resultado"]
 };
 // columnas numéricas (el resto se guarda como texto para que Sheets no convierta fechas ni números)
 var NUMERICAS = {
   categorias: [3, 4],
   sesiones: [6],
-  asistencia: [10]
+  asistencia: [10],
+  auto: [4, 5]
 };
 var ESTADO_TEXTO = { P: "Presente", A: "Ausente", J: "Justificado" };
 var ESTADO_CODIGO = { "Presente": "P", "Ausente": "A", "Justificado": "J" };
@@ -54,16 +65,22 @@ function doPost(e) {
   var bloqueado = false;
   try {
     var pet = JSON.parse(e.postData.contents);
-    var clave = PropertiesService.getScriptProperties().getProperty("CLAVE");
+    var props = PropertiesService.getScriptProperties();
+    var clave = props.getProperty("CLAVE");
+    var claveAuto = props.getProperty("CLAVE_AUTO");
     if (!clave) return salida({ ok: false, error: "Falta definir la propiedad CLAVE en el script (Configuración del proyecto → Propiedades)." });
-    if (!pet.token || String(pet.token) !== String(clave)) return salida({ ok: false, error: "La clave no coincide con la del script." });
+    var tokenOk = pet.token && String(pet.token) === String(clave);
+    // El ejecutor automático usa su propia clave y solo puede tocar estas tres acciones
+    var esEjecutor = !tokenOk && claveAuto && pet.token && String(pet.token) === String(claveAuto) &&
+      ["auto_tomar", "auto_progreso", "auto_fin"].indexOf(pet.accion) >= 0;
+    if (!tokenOk && !esEjecutor) return salida({ ok: false, error: "La clave no coincide con la del script." });
     lock.waitLock(25000);
     bloqueado = true;
 
     switch (pet.accion) {
       case "ping":
         return salida({ ok: true, hoja: SpreadsheetApp.getActiveSpreadsheet().getName(),
-                        version: VERSION_SCRIPT, drive: driveActivo() });
+                        version: VERSION_SCRIPT, drive: driveActivo(), auto: autoConfigurada() });
       case "censo_leer":
         return censoLeer();
       case "censo_escribir":
@@ -73,6 +90,7 @@ function doPost(e) {
       case "lista_guardar":
         return listaGuardar(pet);
       default:
+        if (String(pet.accion).indexOf("auto_") === 0) return autoAccion(pet);
         if (String(pet.accion).indexOf("drive_") === 0) {
           if (!driveActivo()) return salida({ ok: false, codigo: "drive_off",
             error: "El acceso a Drive está desactivado. En el script añade la propiedad DRIVE_ACCESO = si y crea una nueva versión de la implementación." });
@@ -432,6 +450,136 @@ function driveReemplazarDoc(pet) {
   });
   doc.saveAndClose();
   return salida({ ok: true, resumen: resumen, archivo: destinoFicha });
+}
+
+/* ---------------- automatización (tareas en GitHub Actions) ---------------- */
+
+var AUTO_MAX_CELDA = 49000;
+
+function autoConfigurada() {
+  var p = PropertiesService.getScriptProperties();
+  return !!(p.getProperty("GH_TOKEN") && p.getProperty("GH_REPO") && p.getProperty("CLAVE_AUTO"));
+}
+
+function autoAccion(pet) {
+  switch (pet.accion) {
+    case "auto_lanzar":   return autoLanzar(pet.tarea, pet.encargo);
+    case "auto_estado":   return autoEstado(pet.id);
+    case "auto_lista":    return autoLista();
+    case "auto_tomar":    return autoTomar(pet.id);
+    case "auto_progreso": return autoProgreso(pet.id, pet.mensaje);
+    case "auto_fin":      return autoFin(pet.id, pet.estado, pet.mensaje, pet.resultado);
+    default:              return salida({ ok: false, error: "Acción desconocida: " + pet.accion });
+  }
+}
+
+function autoFila(id) {
+  var h = hoja("auto");
+  var n = h.getLastRow();
+  if (n < 2) return { h: h, fila: 0 };
+  var ids = h.getRange(2, 1, n - 1, 1).getValues();
+  for (var i = ids.length - 1; i >= 0; i--) if (String(ids[i][0]) === String(id)) return { h: h, fila: i + 2 };
+  return { h: h, fila: 0 };
+}
+
+function autoJson(txt) {
+  try { return txt ? JSON.parse(txt) : null; } catch (e) { return null; }
+}
+
+function autoFicha(v) {
+  return { id: v[0], tarea: v[1], estado: v[2], creado: Number(v[3]) || 0, actualizado: Number(v[4]) || 0, mensaje: v[5] };
+}
+
+function autoLanzar(tarea, encargo) {
+  var p = PropertiesService.getScriptProperties();
+  if (!autoConfigurada()) return salida({ ok: false, codigo: "auto_off",
+    error: "La automatización no está configurada en el script (faltan GH_TOKEN, GH_REPO o CLAVE_AUTO)." });
+  tarea = String(tarea || "");
+  if (!/^[a-z0-9_-]{1,30}$/.test(tarea)) return salida({ ok: false, error: "Nombre de tarea no válido." });
+  var txt = JSON.stringify(encargo === undefined ? {} : encargo);
+  if (txt.length > AUTO_MAX_CELDA) return salida({ ok: false, error: "El encargo es demasiado grande (máximo unos 49 000 caracteres): divídelo en dos tandas." });
+
+  var id = "T" + Utilities.getUuid().replace(/-/g, "").slice(0, 10);
+  var ahora = Date.now();
+  var h = hoja("auto");
+  var fila = h.getLastRow() + 1;
+  h.getRange(fila, 1, 1, 8).setNumberFormat("@");
+  h.getRange(fila, 4, 1, 2).setNumberFormat("General");
+  h.getRange(fila, 1, 1, 8).setValues([[id, tarea, "en_cola", ahora, ahora, "Encargo enviado, esperando al ejecutor…", txt, ""]]);
+
+  var repo = p.getProperty("GH_REPO");
+  var flujo = p.getProperty("GH_WORKFLOW") || "tarea.yml";
+  var r = UrlFetchApp.fetch("https://api.github.com/repos/" + repo + "/actions/workflows/" + encodeURIComponent(flujo) + "/dispatches", {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "Authorization": "Bearer " + p.getProperty("GH_TOKEN"),
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "secretaria-nebrija"
+    },
+    payload: JSON.stringify({ ref: "main", inputs: { id: id, tarea: tarea } }),
+    muteHttpExceptions: true
+  });
+  var codigo = r.getResponseCode();
+  if (codigo !== 204) {
+    var msg = "GitHub no aceptó el encargo (código " + codigo + ")";
+    if (codigo === 401 || codigo === 403) msg += ": revisa que el token GH_TOKEN siga vigente y tenga permiso de Actions (lectura y escritura) sobre el repositorio.";
+    else if (codigo === 404) msg += ": no se encuentra el repositorio o el flujo " + flujo + " (revisa GH_REPO).";
+    else if (codigo === 422) msg += ": el flujo no tiene el disparador manual o la rama main no existe.";
+    h.getRange(fila, 3).setValue("error");
+    h.getRange(fila, 6).setValue(msg);
+    h.getRange(fila, 7).setValue("");
+    return salida({ ok: false, error: msg });
+  }
+  return salida({ ok: true, id: id });
+}
+
+function autoEstado(id) {
+  var f = autoFila(id);
+  if (!f.fila) return salida({ ok: false, error: "No existe ese encargo." });
+  var v = f.h.getRange(f.fila, 1, 1, 8).getValues()[0];
+  var t = autoFicha(v);
+  t.resultado = autoJson(v[7]);
+  return salida({ ok: true, trabajo: t });
+}
+
+function autoLista() {
+  var h = hoja("auto");
+  var n = h.getLastRow();
+  if (n < 2) return salida({ ok: true, trabajos: [] });
+  var desde = Math.max(2, n - 14);
+  var filas = h.getRange(desde, 1, n - desde + 1, 6).getValues().map(autoFicha).reverse();
+  return salida({ ok: true, trabajos: filas });
+}
+
+function autoTomar(id) {
+  var f = autoFila(id);
+  if (!f.fila) return salida({ ok: false, error: "No existe ese encargo." });
+  var v = f.h.getRange(f.fila, 1, 1, 8).getValues()[0];
+  if (v[2] !== "en_cola") return salida({ ok: false, error: "Ese encargo ya no está en cola (estado: " + v[2] + ")." });
+  f.h.getRange(f.fila, 3).setValue("ejecutando");
+  f.h.getRange(f.fila, 5, 1, 2).setValues([[Date.now(), "El ejecutor ha empezado."]]);
+  return salida({ ok: true, tarea: v[1], encargo: autoJson(v[6]) || {} });
+}
+
+function autoProgreso(id, mensaje) {
+  var f = autoFila(id);
+  if (!f.fila) return salida({ ok: false, error: "No existe ese encargo." });
+  f.h.getRange(f.fila, 5, 1, 2).setValues([[Date.now(), String(mensaje || "").slice(0, 300)]]);
+  return salida({ ok: true });
+}
+
+function autoFin(id, estado, mensaje, resultado) {
+  var f = autoFila(id);
+  if (!f.fila) return salida({ ok: false, error: "No existe ese encargo." });
+  var res = JSON.stringify(resultado === undefined ? null : resultado);
+  if (res.length > AUTO_MAX_CELDA) res = JSON.stringify({ truncado: true });
+  var fin = estado === "ok" ? "ok" : "error";
+  f.h.getRange(f.fila, 3).setValue(fin);
+  f.h.getRange(f.fila, 5, 1, 2).setValues([[Date.now(), String(mensaje || "").slice(0, 300)]]);
+  f.h.getRange(f.fila, 7, 1, 2).setValues([["(borrado al terminar)", res]]);
+  return salida({ ok: true });
 }
 
 /* ---------------- utilidades ---------------- */
