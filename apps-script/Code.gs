@@ -73,6 +73,7 @@ function doGet() {
 }
 
 function doPost(e) {
+  INICIO_PETICION = Date.now(); CORTADO = false;
   var lock = LockService.getScriptLock();
   var bloqueado = false;
   try {
@@ -382,7 +383,7 @@ var TIPOS_BUSQUEDA = {
   pdf: "mimeType = 'application/pdf'",
   imagen: "mimeType contains 'image/'"
 };
-var MAX_LISTA = 400;
+var MAX_LISTA = 400, MAX_BUSQUEDA = 80;
 var MAX_BYTES = 20 * 1024 * 1024;
 
 function driveActivo() {
@@ -425,8 +426,15 @@ function fichaArchivo(f, esCarpeta) {
     size: tam, viewUrl: f.getUrl(), parentId: padreDe(f), owner: propietario(f)
   };
 }
+// Cada ficha son varias llamadas a Drive: se corta a los TIEMPO_DRIVE ms para que la app no espere de más
+var TIEMPO_DRIVE = 20000, INICIO_PETICION = Date.now(), CORTADO = false;
 function cogerHasta(iterador, esCarpeta, lista, tope) {
-  while (iterador.hasNext() && lista.length < tope) lista.push(fichaArchivo(iterador.next(), esCarpeta));
+  while (lista.length < tope) {
+    if (Date.now() - INICIO_PETICION > TIEMPO_DRIVE) { CORTADO = true; return; }
+    if (!iterador.hasNext()) return;
+    lista.push(fichaArchivo(iterador.next(), esCarpeta));
+  }
+  CORTADO = CORTADO || iterador.hasNext();
 }
 function ordenarFichas(lista) {
   lista.sort(function (a, b) {
@@ -457,23 +465,25 @@ function driveBuscar(texto, tipo) {
   if (t) q += " and (title contains '" + comillas(t) + "' or fullText contains '" + comillas(t) + "')";
   var lista = [];
   if (tipo === "carpeta") {
-    cogerHasta(DriveApp.searchFolders(q), true, lista, MAX_LISTA);
+    cogerHasta(DriveApp.searchFolders(q), true, lista, MAX_BUSQUEDA);
   } else {
     if (tipo && TIPOS_BUSQUEDA[tipo]) q += " and (" + TIPOS_BUSQUEDA[tipo] + ")";
     q += " and mimeType != '" + MIME_ATAJO + "'";
-    if (!tipo || tipo === "todo") cogerHasta(DriveApp.searchFolders("trashed = false" + (t ? " and title contains '" + comillas(t) + "'" : "")), true, lista, 40);
-    cogerHasta(DriveApp.searchFiles(q), false, lista, MAX_LISTA);
+    if (!tipo || tipo === "todo") cogerHasta(DriveApp.searchFolders("trashed = false" + (t ? " and title contains '" + comillas(t) + "'" : "")), true, lista, 20);
+    cogerHasta(DriveApp.searchFiles(q), false, lista, MAX_BUSQUEDA);
   }
-  return salida({ ok: true, archivos: ordenarFichas(lista) });
+  return salida({ ok: true, archivos: ordenarFichas(lista), incompleto: CORTADO });
 }
 
 function driveRecientes() {
   var desde = new Date(Date.now() - 45 * 24 * 3600 * 1000);
   var q = "trashed = false and modifiedDate > '" + Utilities.formatDate(desde, "UTC", "yyyy-MM-dd") + "' and mimeType != '" + MIME_CARPETA + "'";
+  var it = DriveApp.searchFiles(q), todos = [];
+  while (it.hasNext() && todos.length < 300 && Date.now() - INICIO_PETICION < TIEMPO_DRIVE / 2) { var f = it.next(); todos.push({ f: f, t: f.getLastUpdated().getTime() }); }
+  todos.sort(function (a, b) { return b.t - a.t; });
   var lista = [];
-  cogerHasta(DriveApp.searchFiles(q), false, lista, 300);
-  lista.sort(function (a, b) { return a.modifiedTime < b.modifiedTime ? 1 : -1; });
-  return salida({ ok: true, archivos: lista.slice(0, 40) });
+  for (var i = 0; i < todos.length && lista.length < 40 && Date.now() - INICIO_PETICION < TIEMPO_DRIVE; i++) lista.push(fichaArchivo(todos[i].f, false));
+  return salida({ ok: true, archivos: lista });
 }
 
 function driveCarpetas() {

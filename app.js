@@ -2271,7 +2271,8 @@ function buscarD(){
   if(!q && tipo==="todo"){ return abrirCarpetaD("root","Mi unidad",true); }
   DRIVE.modo="busqueda"; driveChip("Buscando…", true);
   return driveSrv("drive_buscar", { texto:q, tipo:tipo }).then(function(r){
-    ponerLista(r.archivos, (r.archivos||[]).length+" resultados");
+    var n=(r.archivos||[]).length;
+    ponerLista(r.archivos, r.incompleto ? "Primeros "+n+" resultados: escribe algo más concreto para afinar" : n+" resultados");
     document.getElementById("drive-ruta").innerHTML='<span class="nota" style="margin:0">Resultados de la búsqueda</span>';
   }).catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
 }
