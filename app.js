@@ -2696,6 +2696,10 @@ function copiarTexto(t, boton){
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ fallback(t, ok); });
   else fallback(t, ok);
 }
+document.getElementById("vc-otra-vez").addEventListener("click", function(){
+  S.ajustes.sheets.token=""; guardar(); SYNC.error=""; pintarSync(); pintarResumen(); pintarAjustesLista();
+  document.getElementById("vc-pin").focus();
+});
 [["vc-pin","vc-entrar","vc-estado"],["hs-pin","hs-pin-entrar","hs-estado"]].forEach(function(t){
   var inp=document.getElementById(t[0]), btn=document.getElementById(t[1]);
   var ir=function(){
@@ -2917,6 +2921,8 @@ pintarClupik();
 var inicial=(location.hash||"").replace("#","");
 vista(inicial && document.getElementById("v-"+inicial) ? inicial : "resumen");
 etiquetarTablas();
+// Al abrir, comprobar que la hoja sigue reconociendo a este dispositivo (si no, hojaLlamar lo desvincula)
+if(hojaConfigurada() && !S.ajustes.sheets.auto) setTimeout(function(){ hojaLlamar("ping").catch(function(){}); }, 1200);
 if(hojaConfigurada() && S.ajustes.sheets.auto){
   setTimeout(function(){
     (S.censo.length ? Promise.resolve() : censoDesdeHoja(true)).then(function(){ return sincronizar(true); });

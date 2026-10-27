@@ -1,5 +1,5 @@
 /* Service worker: la app funciona sin conexión. Sube VERSION cuando publiques cambios. */
-var VERSION = "secretaria-v10";
+var VERSION = "secretaria-v11";
 var PRECACHE = [
   "./", "index.html", "app.css", "app.js", "manifest.webmanifest",
   "lib/xlsx.full.min.js", "lib/qrcode.min.js", "lib/jszip.min.js",
@@ -36,7 +36,7 @@ self.addEventListener("fetch", function (e) {
   // Código de la app: primero la red (para recibir las novedades), y si no hay conexión, la copia guardada
   var esCodigo = req.mode === "navigate" || /\.(html|js|css|webmanifest|gs)$/.test(url.pathname) || url.pathname.slice(-1) === "/";
   if (esCodigo) {
-    e.respondWith(fetch(req).then(function (r) {
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(function (r) {
       var copia = r.clone();
       caches.open(VERSION).then(function (c) { c.put(req, copia); });
       return r;
