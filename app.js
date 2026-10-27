@@ -208,6 +208,8 @@ function pintarResumen(){
   var eo=etiquetaOrigen();
   el.innerHTML='<span class="chip '+eo[1]+'"><span class="punto"></span>'+eo[0]+'</span>';
   var iv=document.getElementById("inicio-vacio"); if(iv) iv.hidden = S.censo.length>0;
+  var vp=document.getElementById("vc-pedir"), vh=document.getElementById("vc-hecho");
+  if(vp){ var vinc=hojaConfigurada(); vp.hidden=vinc; vh.hidden=!vinc; }
   document.getElementById("tarjetas-resumen").hidden = !S.censo.length;
 
   var n=S.censo.length;
@@ -2670,7 +2672,7 @@ function vincularPin(pin, estado){
     say("Conectado con la hoja «"+(r.hoja||"sin nombre")+"». Trayendo datos…");
     var paso = S.censo.length ? Promise.resolve(true) : censoDesdeHoja(true);
     return paso.then(function(){ return sincronizar(true); }).then(function(){
-      pintarAjustesLista(); pintarCenso();
+      pintarAjustesLista(); pintarCenso(); pintarResumen();
       say(S.censo.length ? "Listo: "+S.censo.length+" colegiales y la lista de asistencia al día." : "Listo. La hoja aún no tiene censo: súbelo desde «Pasar lista → Categorías y hoja».");
       if(!estado) toast("Dispositivo vinculado con la hoja.");
       return true;
