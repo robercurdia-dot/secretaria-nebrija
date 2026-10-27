@@ -126,9 +126,23 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu("Secretaría")
     .addItem("Nuevo código de acceso", "nuevoPin")
     .addItem("Desvincular todos los dispositivos", "desvincularTodo")
+    .addItem("Activar o desactivar Drive en la app", "alternarDrive")
     .addSeparator()
     .addItem("Importar censo de otra hoja…", "importarCenso")
     .addToUi();
+}
+function alternarDrive() {
+  var ui = SpreadsheetApp.getUi();
+  var props = PropertiesService.getScriptProperties();
+  if (driveActivo()) {
+    if (ui.alert("Drive en la app", "El acceso a Drive desde la app está ACTIVADO. ¿Desactivarlo?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+    props.setProperty("DRIVE_ACCESO", "no");
+    ui.alert("Drive desactivado: la app ya no puede ver ni tocar archivos.");
+  } else {
+    if (ui.alert("Drive en la app", "Cualquier dispositivo vinculado con el código podrá ver, buscar, mover, renombrar, copiar y enviar a la papelera archivos de este Drive. ¿Activarlo?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+    props.setProperty("DRIVE_ACCESO", "si");
+    ui.alert("Drive activado. En la app: «Archivo en Drive» → Comprobar.");
+  }
 }
 // Copia la primera pestaña de otra hoja de Google a «Censo», empezando por la fila de cabeceras.
 function importarCenso() {
