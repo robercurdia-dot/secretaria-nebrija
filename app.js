@@ -1565,7 +1565,7 @@ function pendientesSync(){
 
 /* ---------- conexión con la hoja ---------- */
 // Dirección /exec del script de la Secretaría. No da acceso por sí sola: hace falta el código de 6 cifras.
-var HOJA_CENTRAL="https://script.google.com/macros/s/AKfycby_zDTna8Ju6cCQrcSyiUJyxIror76k1k16rr-oVWDAWEDfASuAkoholxT6su6Yu8YlyA/exec";
+var HOJA_CENTRAL="https://script.google.com/macros/s/AKfycbw8-DDuoqsw-QV6rJ6_KXeW8ihOQkbierQ4TKcFvYwJfb5Jz-nEsMAVNTrvE5StYNGq/exec";
 function hojaCfg(){ return S.ajustes.sheets; }
 function hojaUrl(){ return (hojaCfg().url||"").trim() || HOJA_CENTRAL; }
 function hojaConfigurada(){

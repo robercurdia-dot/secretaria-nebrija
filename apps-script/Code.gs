@@ -126,7 +126,37 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu("Secretaría")
     .addItem("Nuevo código de acceso", "nuevoPin")
     .addItem("Desvincular todos los dispositivos", "desvincularTodo")
+    .addSeparator()
+    .addItem("Importar censo de otra hoja…", "importarCenso")
     .addToUi();
+}
+// Copia la primera pestaña de otra hoja de Google a «Censo», empezando por la fila de cabeceras.
+function importarCenso() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt("Importar censo", "Pega el enlace (o el id) de la hoja de Google con el listado de colegiales:", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var m = String(r.getResponseText()).match(/[-\w]{25,}/);
+  if (!m) { ui.alert("No reconozco ese enlace."); return; }
+  var origen;
+  try { origen = SpreadsheetApp.openById(m[0]); } catch (e) { ui.alert("No puedo abrir esa hoja: " + e.message); return; }
+  var valores = origen.getSheets()[0].getDataRange().getDisplayValues();
+  var fila = -1;
+  for (var i = 0; i < Math.min(valores.length, 15) && fila < 0; i++) {
+    var aciertos = valores[i].filter(function (c) { return /apellido|nombre|habitaci|dni|nie|tel[eé]f|m[oó]vil|correo|email/i.test(String(c)); }).length;
+    if (aciertos >= 2) fila = i;
+  }
+  if (fila < 0) { ui.alert("No encuentro una fila de cabeceras (Apellidos, Nombre, Habitación…) en la primera pestaña de «" + origen.getName() + "»."); return; }
+  var datos = valores.slice(fila).filter(function (f) { return f.some(function (c) { return String(c).trim() !== ""; }); });
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var h = ss.getSheetByName(HOJAS.censo);
+  if (h && h.getLastRow() > 0 && ui.alert("Importar censo", "Se sustituirá la pestaña «Censo» por " + (datos.length - 1) + " filas de «" + origen.getName() + "». ¿Seguir?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  h = h || ss.insertSheet(HOJAS.censo);
+  h.clearContents();
+  var rango = h.getRange(1, 1, datos.length, datos[0].length);
+  rango.setNumberFormat("@");
+  rango.setValues(datos);
+  h.setFrozenRows(1);
+  ui.alert("Censo importado: " + (datos.length - 1) + " filas. En la app, toca «Traer de mi hoja de Google».");
 }
 function nuevoPin() {
   var ui = SpreadsheetApp.getUi();
