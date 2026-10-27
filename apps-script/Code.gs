@@ -139,6 +139,8 @@ function onOpen() {
     .addItem("Activar o desactivar Drive en la app", "alternarDrive")
     .addSeparator()
     .addItem("Elegir el listado de colegiales (Drive)…", "elegirCensoDrive")
+    .addItem("Preparar copia de la tabla de puntos…", "prepararTablaPuntos")
+    .addItem("Ver estructura de la tabla de puntos", "describirTablaPuntos")
     .addToUi();
 }
 function alternarDrive() {
@@ -165,6 +167,45 @@ function censoDeHoja(hoja) {
   if (fila < 0) return null;
   return valores.slice(fila).filter(function (f) { return f.some(function (c) { return String(c).trim() !== ""; }); });
 }
+// La tabla de puntos nunca se edita en el original: se crea una copia convertida a hoja de Google
+// en la misma carpeta (propiedad PUNTOS_TABLA) y la app solo escribe en esa copia.
+function prepararTablaPuntos() {
+  var ui = SpreadsheetApp.getUi();
+  if (typeof Drive === "undefined" || !Drive.Files) { ui.alert("Falta el servicio avanzado de Drive en el script."); return; }
+  var r = ui.prompt("Tabla de puntos", "Pega el enlace de la tabla de puntos (Excel o hoja de Google). Se creará una COPIA en la misma carpeta; el original no se modifica.", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var m = String(r.getResponseText()).match(/[-\w]{25,}/);
+  if (!m) { ui.alert("No reconozco ese enlace."); return; }
+  var meta;
+  try { meta = Drive.Files.get(m[0], { fields: "id,name,mimeType,parents", supportsAllDrives: true }); }
+  catch (e) { ui.alert("No puedo abrir ese archivo: " + e.message); return; }
+  var nombre = String(meta.name).replace(/\.(xlsx|xls|csv)$/i, "") + " (copia para la app)";
+  var copia = Drive.Files.copy({ name: nombre, mimeType: "application/vnd.google-apps.spreadsheet", parents: meta.parents }, meta.id, { supportsAllDrives: true });
+  PropertiesService.getScriptProperties().setProperty("PUNTOS_TABLA", copia.id);
+  ui.alert("Copia creada: «" + nombre + "», en la misma carpeta que el original (que no se ha tocado).\n\nAhora usa «Ver estructura de la tabla de puntos» y mándale una captura a quien te ayuda con la app.");
+}
+function describirTablaPuntos() {
+  var ui = SpreadsheetApp.getUi();
+  var id = PropertiesService.getScriptProperties().getProperty("PUNTOS_TABLA");
+  if (!id) { ui.alert("Todavía no hay copia de la tabla de puntos: usa «Preparar copia de la tabla de puntos…»."); return; }
+  var ss = SpreadsheetApp.openById(id), txt = "«" + ss.getName() + "»\n";
+  ss.getSheets().slice(0, 6).forEach(function (h) {
+    var n = Math.min(h.getLastRow(), 12), c = h.getLastColumn();
+    txt += "\n▸ Pestaña «" + h.getName() + "»: " + h.getLastRow() + " filas × " + c + " columnas\n";
+    if (!n || !c) return;
+    var v = h.getRange(1, 1, n, c).getDisplayValues(), fila = -1;
+    for (var i = 0; i < n && fila < 0; i++) if (v[i].some(function (x) { return /apellido|nombre/i.test(x); })) fila = i;
+    if (fila < 0) { txt += "  (no encuentro cabeceras con Apellidos/Nombre)\n"; return; }
+    txt += "  Cabeceras en la fila " + (fila + 1) + ":\n  " + v[fila].map(function (x, j) { return letraCol(j + 1) + "=" + (String(x).trim() || "·").slice(0, 22); }).join("  ") + "\n";
+    if (fila + 2 <= h.getLastRow()) {
+      var f = h.getRange(fila + 2, 1, 1, c).getFormulas()[0];
+      var conF = f.map(function (x, j) { return x ? letraCol(j + 1) + ": " + x.slice(0, 40) : ""; }).filter(String);
+      if (conF.length) txt += "  Fórmulas en la primera fila de datos: " + conF.slice(0, 6).join("  ") + "\n";
+    }
+  });
+  ui.alert("Estructura (solo títulos, sin datos de personas)", txt.slice(0, 3500), ui.ButtonSet.OK);
+}
+function letraCol(n) { var s = ""; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; } return s; }
 function elegirCensoDrive() {
   var ui = SpreadsheetApp.getUi();
   var props = PropertiesService.getScriptProperties();
