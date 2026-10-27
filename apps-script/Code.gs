@@ -16,6 +16,9 @@
  *   se bloquea 15 minutos (y el doble cada vez que se repite, hasta 24 horas); los
  *   dispositivos ya vinculados siguen funcionando. Cambiar el PIN no desvincula a nadie:
  *   para desvincular todos los dispositivos, menú Secretaría → Desvincular todos los dispositivos.
+ *
+ * CENSO DESDE DRIVE: menú Secretaría → Elegir el listado de colegiales (Drive) guarda en
+ *   CENSO_ORIGEN el id de una hoja de Google; la app lee el censo siempre de ahí (solo lectura).
  * La hoja crea sola estas pestañas:
  *   Censo        · lista de colegiales (la lee y la escribe la app)
  *   Categorías   · categorías de asistencia y puntos por asistencia
@@ -128,7 +131,7 @@ function onOpen() {
     .addItem("Desvincular todos los dispositivos", "desvincularTodo")
     .addItem("Activar o desactivar Drive en la app", "alternarDrive")
     .addSeparator()
-    .addItem("Importar censo de otra hoja…", "importarCenso")
+    .addItem("Elegir el listado de colegiales (Drive)…", "elegirCensoDrive")
     .addToUi();
 }
 function alternarDrive() {
@@ -144,33 +147,39 @@ function alternarDrive() {
     ui.alert("Drive activado. En la app: «Archivo en Drive» → Comprobar.");
   }
 }
-// Copia la primera pestaña de otra hoja de Google a «Censo», empezando por la fila de cabeceras.
-function importarCenso() {
-  var ui = SpreadsheetApp.getUi();
-  var r = ui.prompt("Importar censo", "Pega el enlace (o el id) de la hoja de Google con el listado de colegiales:", ui.ButtonSet.OK_CANCEL);
-  if (r.getSelectedButton() !== ui.Button.OK) return;
-  var m = String(r.getResponseText()).match(/[-\w]{25,}/);
-  if (!m) { ui.alert("No reconozco ese enlace."); return; }
-  var origen;
-  try { origen = SpreadsheetApp.openById(m[0]); } catch (e) { ui.alert("No puedo abrir esa hoja: " + e.message); return; }
-  var valores = origen.getSheets()[0].getDataRange().getDisplayValues();
+// El censo se lee siempre de un listado de Drive (propiedad CENSO_ORIGEN); el listado nunca se modifica.
+function censoDeHoja(hoja) {
+  var valores = hoja.getSheets()[0].getDataRange().getDisplayValues();
   var fila = -1;
   for (var i = 0; i < Math.min(valores.length, 15) && fila < 0; i++) {
     var aciertos = valores[i].filter(function (c) { return /apellido|nombre|habitaci|dni|nie|tel[eé]f|m[oó]vil|correo|email/i.test(String(c)); }).length;
     if (aciertos >= 2) fila = i;
   }
-  if (fila < 0) { ui.alert("No encuentro una fila de cabeceras (Apellidos, Nombre, Habitación…) en la primera pestaña de «" + origen.getName() + "»."); return; }
-  var datos = valores.slice(fila).filter(function (f) { return f.some(function (c) { return String(c).trim() !== ""; }); });
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var h = ss.getSheetByName(HOJAS.censo);
-  if (h && h.getLastRow() > 0 && ui.alert("Importar censo", "Se sustituirá la pestaña «Censo» por " + (datos.length - 1) + " filas de «" + origen.getName() + "». ¿Seguir?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
-  h = h || ss.insertSheet(HOJAS.censo);
-  h.clearContents();
-  var rango = h.getRange(1, 1, datos.length, datos[0].length);
-  rango.setNumberFormat("@");
-  rango.setValues(datos);
-  h.setFrozenRows(1);
-  ui.alert("Censo importado: " + (datos.length - 1) + " filas. En la app, toca «Traer de mi hoja de Google».");
+  if (fila < 0) return null;
+  return valores.slice(fila).filter(function (f) { return f.some(function (c) { return String(c).trim() !== ""; }); });
+}
+function elegirCensoDrive() {
+  var ui = SpreadsheetApp.getUi();
+  var props = PropertiesService.getScriptProperties();
+  var actual = props.getProperty("CENSO_ORIGEN");
+  var nombreActual = "";
+  if (actual) { try { nombreActual = SpreadsheetApp.openById(actual).getName(); } catch (e) { nombreActual = "(no se puede abrir)"; } }
+  var r = ui.prompt("Listado de colegiales",
+    (actual ? "Ahora el censo se lee de «" + nombreActual + "».\n\n" : "") +
+    "Pega el enlace de la hoja de Google de Drive con el listado de colegiales (la app lo leerá siempre de ahí; nunca lo modifica). Déjalo vacío para dejar de usarlo.",
+    ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var texto = String(r.getResponseText()).trim();
+  if (!texto) { props.deleteProperty("CENSO_ORIGEN"); ui.alert("Hecho: el censo vuelve a leerse de la pestaña «Censo» de esta hoja."); return; }
+  var m = texto.match(/[-\w]{25,}/);
+  if (!m) { ui.alert("No reconozco ese enlace."); return; }
+  var origen;
+  try { origen = SpreadsheetApp.openById(m[0]); }
+  catch (e) { ui.alert("No puedo abrir esa hoja. Si es un Excel (.xlsx), ábrelo en Drive y guárdalo como hoja de Google (Archivo → Guardar como Hojas de cálculo de Google)."); return; }
+  var datos = censoDeHoja(origen);
+  if (!datos) { ui.alert("No encuentro una fila de cabeceras (Apellidos, Nombre, Habitación…) en la primera pestaña de «" + origen.getName() + "»."); return; }
+  props.setProperty("CENSO_ORIGEN", m[0]);
+  ui.alert("Listo: la app leerá el censo de «" + origen.getName() + "» (" + (datos.length - 1) + " filas). En la app, toca «Traer de mi hoja de Google».");
 }
 function nuevoPin() {
   var ui = SpreadsheetApp.getUi();
@@ -236,6 +245,15 @@ function vincularPin(props, pet) {
 /* ---------------- censo ---------------- */
 
 function censoLeer() {
+  var origen = PropertiesService.getScriptProperties().getProperty("CENSO_ORIGEN");
+  if (origen) {
+    var hoja;
+    try { hoja = SpreadsheetApp.openById(origen); }
+    catch (e) { return salida({ ok: false, error: "No se puede abrir el listado de colegiales de Drive. En la hoja, menú Secretaría → Elegir el listado de colegiales." }); }
+    var datos = censoDeHoja(hoja);
+    if (!datos) return salida({ ok: false, error: "El listado «" + hoja.getName() + "» no tiene una fila de cabeceras reconocible (Apellidos, Nombre, Habitación…)." });
+    return salida({ ok: true, valores: datos, origen: hoja.getName() });
+  }
   var h = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(HOJAS.censo);
   if (!h) return salida({ ok: false, error: "No existe la pestaña «Censo» en la hoja. Créala con cabeceras (Apellidos, Nombre, Teléfono, Habitación, DNI…) o súbela desde la app." });
   var valores = h.getDataRange().getDisplayValues();
@@ -244,6 +262,8 @@ function censoLeer() {
 
 function censoEscribir(valores) {
   if (!valores || !valores.length) return salida({ ok: false, error: "No hay datos que escribir." });
+  if (PropertiesService.getScriptProperties().getProperty("CENSO_ORIGEN"))
+    return salida({ ok: false, error: "El censo se lee del listado de colegiales de Drive: haz los cambios en ese listado, no desde la app." });
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var h = ss.getSheetByName(HOJAS.censo) || ss.insertSheet(HOJAS.censo);
   h.clearContents();
