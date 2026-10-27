@@ -32,6 +32,9 @@
  *   (Google te pedirá un permiso nuevo, solo la primera vez). Quien tenga la CLAVE
  *   tendrá entonces acceso a tu Drive: trátala como una contraseña.
  *
+ *   Búsqueda rápida: en el editor, Servicios (+) → Drive API (v3), identificador «Drive».
+ *   Sin él la búsqueda funciona igual pero más lenta y sin propietario ni tamaño.
+ *
  * AUTOMATIZACIÓN (opcional): tareas que hace un navegador automático en un repositorio
  * privado de GitHub (por ejemplo, dar de alta personas en Clupik). Propiedades:
  *   GH_TOKEN    · token de GitHub limitado a ese repositorio (permiso Actions: lectura y escritura)
@@ -459,20 +462,38 @@ function driveListar(carpetaId) {
   return salida({ ok: true, id: c.getId(), nombre: c.getName(), archivos: ordenarFichas(lista) });
 }
 
+// Búsqueda solo por título. Con el servicio avanzado de Drive es una sola llamada (~1 s);
+// si no está activado, se recorre DriveApp con un tope de 2 s y datos mínimos.
 function driveBuscar(texto, tipo) {
   var t = String(texto || "").trim();
-  var q = "trashed = false";
-  if (t) q += " and (title contains '" + comillas(t) + "' or fullText contains '" + comillas(t) + "')";
-  var lista = [];
-  if (tipo === "carpeta") {
-    cogerHasta(DriveApp.searchFolders(q), true, lista, MAX_BUSQUEDA);
-  } else {
-    if (tipo && TIPOS_BUSQUEDA[tipo]) q += " and (" + TIPOS_BUSQUEDA[tipo] + ")";
-    q += " and mimeType != '" + MIME_ATAJO + "'";
-    if (!tipo || tipo === "todo") cogerHasta(DriveApp.searchFolders("trashed = false" + (t ? " and title contains '" + comillas(t) + "'" : "")), true, lista, 20);
-    cogerHasta(DriveApp.searchFiles(q), false, lista, MAX_BUSQUEDA);
+  var filtro = "";
+  if (tipo === "carpeta") filtro = "mimeType = '" + MIME_CARPETA + "'";
+  else if (tipo && TIPOS_BUSQUEDA[tipo]) filtro = TIPOS_BUSQUEDA[tipo];
+  if (typeof Drive !== "undefined" && Drive.Files && Drive.Files.list) {
+    var q = "trashed = false and mimeType != '" + MIME_ATAJO + "'" + (t ? " and name contains '" + comillas(t) + "'" : "") + (filtro ? " and (" + filtro + ")" : "");
+    var r = Drive.Files.list({ q: q, pageSize: MAX_BUSQUEDA, orderBy: "folder,name",
+      fields: "nextPageToken,files(id,name,mimeType,modifiedTime,size,webViewLink,parents,owners(emailAddress))",
+      supportsAllDrives: true, includeItemsFromAllDrives: true });
+    var lista = (r.files || []).map(function (f) {
+      return { id: f.id, title: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime, size: Number(f.size || 0),
+        viewUrl: f.webViewLink || "", parentId: (f.parents || [])[0] || "", owner: ((f.owners || [])[0] || {}).emailAddress || "" };
+    });
+    return salida({ ok: true, archivos: ordenarFichas(lista), incompleto: !!r.nextPageToken });
   }
-  return salida({ ok: true, archivos: ordenarFichas(lista), incompleto: CORTADO });
+  var q2 = "trashed = false" + (t ? " and title contains '" + comillas(t) + "'" : "");
+  var lista2 = [], fin = Date.now() + 2000;
+  var it = tipo === "carpeta" ? DriveApp.searchFolders(q2)
+    : DriveApp.searchFiles(q2 + " and mimeType != '" + MIME_ATAJO + "' and mimeType != '" + MIME_CARPETA + "'" + (filtro ? " and (" + filtro + ")" : ""));
+  if (!tipo || tipo === "todo") {
+    var itc = DriveApp.searchFolders(q2);
+    while (itc.hasNext() && lista2.length < 15 && Date.now() < fin) lista2.push(fichaLigera(itc.next(), true));
+  }
+  while (it.hasNext() && lista2.length < 40 && Date.now() < fin) lista2.push(fichaLigera(it.next(), tipo === "carpeta"));
+  return salida({ ok: true, archivos: ordenarFichas(lista2), incompleto: it.hasNext() });
+}
+function fichaLigera(f, esCarpeta) {
+  return { id: f.getId(), title: f.getName(), mimeType: esCarpeta ? MIME_CARPETA : f.getMimeType(),
+    modifiedTime: f.getLastUpdated().toISOString(), size: 0, viewUrl: f.getUrl(), parentId: "", owner: "" };
 }
 
 function driveRecientes() {
