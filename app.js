@@ -1580,7 +1580,7 @@ function hojaLlamar(accion, datos){
   return scriptLlamar(hojaUrl(), Object.assign({ accion:accion, token:token }, datos||{})).catch(function(err){
     // Llave de dispositivo que la hoja ya no reconoce (otra central o desvinculado): volver a pedir el código
     if(/^[0-9a-f]{64}$/.test(token) && /clave no coincide/i.test(err.message) && hojaCfg().token.trim()===token){
-      S.ajustes.sheets.token=""; guardar();
+      S.ajustes.sheets.token=""; guardar(); idxBorrar();
       SYNC.error=""; pintarSync(); pintarResumen(); pintarAjustesLista();
       throw new Error("Este dispositivo ya no está vinculado con la hoja. Vuelve a escribir el código de 6 cifras (Inicio, o Lista → Categorías y hoja).");
     }
@@ -2235,7 +2235,7 @@ function driveComprobar(){
 }
 function entrarDrive(){
   if(DRIVE.listo){ if(!DRIVE.archivos.length) abrirCarpetaD("root","Mi unidad",true); return; }
-  driveComprobar().then(function(ok){ if(ok){ abrirCarpetaD("root","Mi unidad",true); cargarCarpetasD(); } });
+  driveComprobar().then(function(ok){ if(ok){ abrirCarpetaD("root","Mi unidad",true); cargarCarpetasD(); idxRefrescar(false); } });
 }
 function cargarCarpetasD(){
   driveSrv("drive_carpetas").then(function(r){
@@ -2263,12 +2263,59 @@ function abrirCarpetaD(id, titulo, reiniciar){
     .catch(function(e){ driveChip("Drive", false); toast(e.message, "mal"); });
 }
 function refrescarD(){
+  if(IDX.datos){ IDX.datos.t=0; idxRefrescar(false); }
   if(DRIVE.modo==="carpeta") return abrirCarpetaD(carpetaActual(), null, false);
   return buscarD();
+}
+/* Índice de nombres del Drive guardado en el móvil: buscar es instantáneo y se refresca en segundo plano */
+var IDX_CLAVE="nebrija-drive-indice", IDX={ datos:null, norm:null, cargando:null };
+try{ var idxG=JSON.parse(localStorage.getItem(IDX_CLAVE)||"null"); if(idxG && idxG.filas) IDX.datos=idxG; }catch(e){}
+function idxBorrar(){ IDX.datos=null; IDX.norm=null; try{ localStorage.removeItem(IDX_CLAVE); }catch(e){} }
+function idxRefrescar(forzar){
+  if(IDX.cargando) return IDX.cargando;
+  if(!forzar && IDX.datos && Date.now()-IDX.datos.t<10*60000) return Promise.resolve();
+  IDX.cargando=driveSrv("drive_indice").then(function(r){
+    IDX.datos={ t:Date.now(), tipos:r.tipos||[], filas:r.filas||[], completo:!!r.completo }; IDX.norm=null;
+    try{ localStorage.setItem(IDX_CLAVE, JSON.stringify(IDX.datos)); }catch(e){}
+  }).catch(function(){}).then(function(){ IDX.cargando=null; });
+  return IDX.cargando;
+}
+var IDX_TIPOS={
+  word:/wordprocessingml|google-apps\.document$/, excel:/spreadsheetml|ms-excel|google-apps\.spreadsheet$|text\/csv/,
+  pdf:/^application\/pdf$/, imagen:/^image\//, carpeta:/google-apps\.folder$/
+};
+function urlDriveD(id, mime){
+  if(/folder$/.test(mime)) return "https://drive.google.com/drive/folders/"+id;
+  if(/google-apps\.document$/.test(mime)) return "https://docs.google.com/document/d/"+id+"/edit";
+  if(/google-apps\.spreadsheet$/.test(mime)) return "https://docs.google.com/spreadsheets/d/"+id+"/edit";
+  if(/google-apps\.presentation$/.test(mime)) return "https://docs.google.com/presentation/d/"+id+"/edit";
+  return "https://drive.google.com/file/d/"+id+"/view";
+}
+function buscarLocalD(q, tipo){
+  var d=IDX.datos, palabras=toks(q), re=IDX_TIPOS[tipo];
+  if(!IDX.norm) IDX.norm=d.filas.map(function(f){ return norm(f[1]); });
+  var out=[];
+  for(var i=0;i<d.filas.length && out.length<200;i++){
+    var f=d.filas[i], mime=d.tipos[f[2]], n=IDX.norm[i];
+    if(re && !re.test(mime)) continue;
+    if(!palabras.every(function(w){ return n.indexOf(w)>=0; })) continue;
+    out.push({ id:f[0], title:f[1], mimeType:mime, modifiedTime:new Date(f[3]).toISOString(), size:f[5], viewUrl:urlDriveD(f[0], mime), parentId:f[4], owner:"" });
+  }
+  out.sort(function(a,b){ var ca=esCarpetaD(a)?0:1, cb=esCarpetaD(b)?0:1; return ca-cb || (a.title.toLowerCase()<b.title.toLowerCase()?-1:1); });
+  return out;
 }
 function buscarD(){
   var q=document.getElementById("drive-q").value.trim(), tipo=document.getElementById("drive-tipo").value;
   if(!q && tipo==="todo"){ return abrirCarpetaD("root","Mi unidad",true); }
+  if(IDX.datos){
+    DRIVE.modo="busqueda";
+    var res=buscarLocalD(q, tipo);
+    ponerLista(res, res.length+(res.length===200?"+":"")+" resultados");
+    document.getElementById("drive-ruta").innerHTML='<span class="nota" style="margin:0">Resultados de la búsqueda</span>';
+    idxRefrescar(false);
+    return Promise.resolve();
+  }
+  idxRefrescar(true);
   DRIVE.modo="busqueda"; driveChip("Buscando…", true);
   return driveSrv("drive_buscar", { texto:q, tipo:tipo }).then(function(r){
     var n=(r.archivos||[]).length;
@@ -2311,7 +2358,7 @@ function seleccionarD(f){
   DRIVE.sel=f;
   var d=document.getElementById("drive-detalle"); d.hidden=false;
   document.getElementById("drive-titulo").textContent=f.title;
-  document.getElementById("drive-meta").textContent=tipoDrive(f.mimeType)+" · "+fechaCorta(f.modifiedTime)+" · "+(f.owner||"")+(f.size?" · "+tamano(f.size):"");
+  document.getElementById("drive-meta").textContent=[tipoDrive(f.mimeType), fechaCorta(f.modifiedTime), f.owner, f.size?tamano(f.size):""].filter(Boolean).join(" · ");
   var a=document.getElementById("drive-abrir"); a.href=f.viewUrl||"#";
   document.getElementById("drive-est").textContent="";
   var t=document.getElementById("drive-texto"); t.style.display="none"; t.textContent="";
@@ -2357,6 +2404,11 @@ function estD(t, mal){ var e=document.getElementById("drive-est"); e.textContent
   document.getElementById("drive-refrescar").addEventListener("click", refrescarD);
   document.getElementById("drive-buscar").addEventListener("click", buscarD);
   document.getElementById("drive-q").addEventListener("keydown", function(e){ if(e.key==="Enter") buscarD(); });
+  var esperaQ=null;
+  document.getElementById("drive-q").addEventListener("input", function(){
+    if(!IDX.datos) return;
+    clearTimeout(esperaQ); esperaQ=setTimeout(function(){ if(document.getElementById("drive-q").value.trim().length>=2) buscarD(); }, 120);
+  });
   document.getElementById("drive-tipo").addEventListener("change", buscarD);
   document.getElementById("drive-recientes").addEventListener("click", function(){
     DRIVE.modo="busqueda"; driveChip("Cargando…", true);
@@ -2676,7 +2728,7 @@ function vincularPin(pin, estado){
   var antes=Object.assign({}, S.ajustes.sheets);
   say("Comprobando el código…");
   return scriptLlamar(url, { accion:"vincular", pin:pin, nombre:nombreDispositivo() }).then(function(r){
-    S.ajustes.sheets.token=r.token;
+    S.ajustes.sheets.token=r.token; idxBorrar();
     if(url===HOJA_CENTRAL) S.ajustes.sheets.url="";
     guardar();
     say("Conectado con la hoja «"+(r.hoja||"sin nombre")+"». Trayendo datos…");
@@ -2698,7 +2750,7 @@ function copiarTexto(t, boton){
   else fallback(t, ok);
 }
 document.getElementById("vc-otra-vez").addEventListener("click", function(){
-  S.ajustes.sheets.token=""; guardar(); SYNC.error=""; pintarSync(); pintarResumen(); pintarAjustesLista();
+  S.ajustes.sheets.token=""; guardar(); idxBorrar(); SYNC.error=""; pintarSync(); pintarResumen(); pintarAjustesLista();
   document.getElementById("vc-pin").focus();
 });
 [["vc-pin","vc-entrar","vc-estado"],["hs-pin","hs-pin-entrar","hs-estado"]].forEach(function(t){

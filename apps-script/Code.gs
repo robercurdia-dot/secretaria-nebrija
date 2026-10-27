@@ -95,8 +95,11 @@ function doPost(e) {
     var esEjecutor = !tokenOk && claveAuto && pet.token && String(pet.token) === String(claveAuto) &&
       ["auto_tomar", "auto_progreso", "auto_fin"].indexOf(pet.accion) >= 0;
     if (!tokenOk && !esEjecutor) return salida({ ok: false, error: "La clave no coincide con la del script." });
-    lock.waitLock(25000);
-    bloqueado = true;
+    // Las consultas que solo leen Drive no esperan a que termine una sincronización
+    if (SOLO_LECTURA.indexOf(pet.accion) < 0) {
+      lock.waitLock(25000);
+      bloqueado = true;
+    }
 
     switch (pet.accion) {
       case "ping":
@@ -387,6 +390,7 @@ var TIPOS_BUSQUEDA = {
   imagen: "mimeType contains 'image/'"
 };
 var MAX_LISTA = 400, MAX_BUSQUEDA = 80;
+var SOLO_LECTURA = ["ping", "drive_buscar", "drive_indice", "drive_listar", "drive_recientes", "drive_carpetas", "drive_leer"];
 var MAX_BYTES = 20 * 1024 * 1024;
 
 function driveActivo() {
@@ -397,6 +401,7 @@ function driveAccion(pet) {
   switch (pet.accion) {
     case "drive_listar":      return driveListar(pet.carpeta);
     case "drive_buscar":      return driveBuscar(pet.texto, pet.tipo);
+    case "drive_indice":      return driveIndice();
     case "drive_recientes":   return driveRecientes();
     case "drive_carpetas":    return driveCarpetas();
     case "drive_leer":        return driveLeer(pet.id);
@@ -490,6 +495,22 @@ function driveBuscar(texto, tipo) {
   }
   while (it.hasNext() && lista2.length < 40 && Date.now() < fin) lista2.push(fichaLigera(it.next(), tipo === "carpeta"));
   return salida({ ok: true, archivos: ordenarFichas(lista2), incompleto: it.hasNext() });
+}
+// Índice de nombres de todo el Drive para buscar en el propio móvil sin esperar al servidor.
+// Filas compactas: [id, nombre, tipo, modificado (ms), carpeta padre, tamaño].
+function driveIndice() {
+  if (typeof Drive === "undefined" || !Drive.Files || !Drive.Files.list) return salida({ ok: false, codigo: "sin_api", error: "Falta el servicio avanzado de Drive en el script." });
+  var filas = [], token = null, tipos = [], posTipo = {};
+  do {
+    var r = Drive.Files.list({ q: "trashed = false and mimeType != '" + MIME_ATAJO + "'", pageSize: 1000, pageToken: token,
+      fields: "nextPageToken,files(id,name,mimeType,modifiedTime,parents,size)", supportsAllDrives: true, includeItemsFromAllDrives: true });
+    (r.files || []).forEach(function (f) {
+      if (!(f.mimeType in posTipo)) { posTipo[f.mimeType] = tipos.length; tipos.push(f.mimeType); }
+      filas.push([f.id, f.name, posTipo[f.mimeType], Date.parse(f.modifiedTime) || 0, (f.parents || [])[0] || "", Number(f.size || 0)]);
+    });
+    token = r.nextPageToken;
+  } while (token && filas.length < 20000 && Date.now() - INICIO_PETICION < TIEMPO_DRIVE);
+  return salida({ ok: true, tipos: tipos, filas: filas, completo: !token });
 }
 function fichaLigera(f, esCarpeta) {
   return { id: f.getId(), title: f.getName(), mimeType: esCarpeta ? MIME_CARPETA : f.getMimeType(),
