@@ -1,5 +1,5 @@
 /* Service worker: la app funciona sin conexión. Sube VERSION cuando publiques cambios. */
-var VERSION = "secretaria-v9";
+var VERSION = "secretaria-v10";
 var PRECACHE = [
   "./", "index.html", "app.css", "app.js", "manifest.webmanifest",
   "lib/xlsx.full.min.js", "lib/qrcode.min.js", "lib/jszip.min.js",

@@ -1576,7 +1576,16 @@ function hojaConfigurada(){
 }
 function hojaLlamar(accion, datos){
   if(!hojaConfigurada()) return Promise.reject(new Error("Falta configurar la hoja de Google (dirección y clave)."));
-  return scriptLlamar(hojaUrl(), Object.assign({ accion:accion, token:hojaCfg().token.trim() }, datos||{}));
+  var token=hojaCfg().token.trim();
+  return scriptLlamar(hojaUrl(), Object.assign({ accion:accion, token:token }, datos||{})).catch(function(err){
+    // Llave de dispositivo que la hoja ya no reconoce (otra central o desvinculado): volver a pedir el código
+    if(/^[0-9a-f]{64}$/.test(token) && /clave no coincide/i.test(err.message) && hojaCfg().token.trim()===token){
+      S.ajustes.sheets.token=""; guardar();
+      SYNC.error=""; pintarSync(); pintarResumen(); pintarAjustesLista();
+      throw new Error("Este dispositivo ya no está vinculado con la hoja. Vuelve a escribir el código de 6 cifras (Inicio, o Lista → Categorías y hoja).");
+    }
+    throw err;
+  });
 }
 function scriptLlamar(url, pet){
   var ctl=("AbortController" in window) ? new AbortController() : null;
