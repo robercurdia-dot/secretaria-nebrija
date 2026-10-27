@@ -7,7 +7,15 @@
  * Antes de desplegar, define la propiedad de la secuencia de comandos:
  *   Configuración del proyecto (⚙) → Propiedades de la secuencia de comandos → CLAVE = (la clave que quieras)
  *
- * La app web se ejecuta con tu cuenta y solo responde a quien envíe esa CLAVE.
+ * La app web se ejecuta con tu cuenta y solo responde a quien envíe esa CLAVE
+ * o la llave de un dispositivo vinculado.
+ *
+ * VINCULAR DISPOSITIVOS CON UN CÓDIGO DE 6 CIFRAS
+ *   En la hoja, menú Secretaría → Nuevo código de acceso (o la propiedad PIN = 6 cifras).
+ *   En cada móvil u ordenador se escribe ese código una vez y el script le da su propia llave. Tras 5 fallos seguidos el código
+ *   se bloquea 15 minutos (y el doble cada vez que se repite, hasta 24 horas); los
+ *   dispositivos ya vinculados siguen funcionando. Cambiar el PIN no desvincula a nadie:
+ *   para desvincular todos los dispositivos, menú Secretaría → Desvincular todos los dispositivos.
  * La hoja crea sola estas pestañas:
  *   Censo        · lista de colegiales (la lee y la escribe la app)
  *   Categorías   · categorías de asistencia y puntos por asistencia
@@ -29,7 +37,8 @@
  *                 recoja el encargo y devuelva el resultado (no da acceso a nada más)
  *   GH_WORKFLOW · (opcional) nombre del flujo; por defecto tarea.yml
  */
-var VERSION_SCRIPT = 3;
+var VERSION_SCRIPT = 4;
+var PIN_INTENTOS = 5;
 
 var HOJAS = {
   censo: "Censo",
@@ -66,10 +75,15 @@ function doPost(e) {
   try {
     var pet = JSON.parse(e.postData.contents);
     var props = PropertiesService.getScriptProperties();
+    if (pet.accion === "vincular") {
+      lock.waitLock(25000);
+      bloqueado = true;
+      return vincularPin(props, pet);
+    }
     var clave = props.getProperty("CLAVE");
     var claveAuto = props.getProperty("CLAVE_AUTO");
-    if (!clave) return salida({ ok: false, error: "Falta definir la propiedad CLAVE en el script (Configuración del proyecto → Propiedades)." });
-    var tokenOk = pet.token && String(pet.token) === String(clave);
+    // CLAVE es opcional: sin ella solo entran los dispositivos vinculados con el PIN
+    var tokenOk = !!pet.token && ((clave && String(pet.token) === String(clave)) || esDispositivo(props, String(pet.token)));
     // El ejecutor automático usa su propia clave y solo puede tocar estas tres acciones
     var esEjecutor = !tokenOk && claveAuto && pet.token && String(pet.token) === String(claveAuto) &&
       ["auto_tomar", "auto_progreso", "auto_fin"].indexOf(pet.accion) >= 0;
@@ -103,6 +117,76 @@ function doPost(e) {
   } finally {
     if (bloqueado) { try { lock.releaseLock(); } catch (x) {} }
   }
+}
+
+/* ---------------- vinculación con PIN ---------------- */
+
+// Menú en la hoja: «Secretaría → Nuevo código de acceso» crea un PIN al azar y lo enseña solo a quien tiene la hoja abierta.
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu("Secretaría")
+    .addItem("Nuevo código de acceso", "nuevoPin")
+    .addItem("Desvincular todos los dispositivos", "desvincularTodo")
+    .addToUi();
+}
+function nuevoPin() {
+  var ui = SpreadsheetApp.getUi();
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty("PIN") && ui.alert("Código de acceso", "Ya hay un código. Si creas otro, el anterior deja de valer (los dispositivos ya vinculados siguen funcionando). ¿Crear uno nuevo?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid(), Utilities.Charset.UTF_8);
+  var n = 0;
+  for (var i = 0; i < 6; i++) n = (n * 256 + (bytes[i] & 255)) % 1000000;
+  var pin = ("00000" + n).slice(-6);
+  props.setProperty("PIN", pin);
+  props.deleteProperty("PIN_BLOQUEO");
+  ui.alert("Código de acceso", "El código para vincular dispositivos es:\n\n" + pin + "\n\nEscríbelo en la app, en «¿Eres de la Secretaría?». No lo compartas por escrito.", ui.ButtonSet.OK);
+}
+function desvincularTodo() {
+  var ui = SpreadsheetApp.getUi();
+  if (ui.alert("Desvincular", "Todos los móviles y ordenadores vinculados con el código tendrán que volver a escribirlo. ¿Seguir?", ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  PropertiesService.getScriptProperties().deleteProperty("DISPOSITIVOS");
+  ui.alert("Hecho: ningún dispositivo queda vinculado con el código.");
+}
+
+function huella(texto) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto, Utilities.Charset.UTF_8));
+}
+function leerJson(props, nombre) {
+  try { return JSON.parse(props.getProperty(nombre) || "{}") || {}; } catch (e) { return {}; }
+}
+function esDispositivo(props, token) {
+  if (token.length < 40) return false;
+  return !!leerJson(props, "DISPOSITIVOS")[huella(token)];
+}
+function vincularPin(props, pet) {
+  var pin = String(props.getProperty("PIN") || "").trim();
+  if (!/^\d{6}$/.test(pin)) return salida({ ok: false, codigo: "pin_off",
+    error: "El script no tiene código de acceso: añade la propiedad PIN con 6 cifras." });
+  var ahora = Date.now();
+  var b = leerJson(props, "PIN_BLOQUEO");
+  if (b.hasta && ahora < b.hasta) {
+    var min = Math.ceil((b.hasta - ahora) / 60000);
+    return salida({ ok: false, codigo: "pin_bloqueado",
+      error: "Demasiados intentos fallidos. Prueba de nuevo dentro de " + min + (min === 1 ? " minuto." : " minutos.") });
+  }
+  if (String(pet.pin || "") !== pin) {
+    b.fallos = (b.fallos || 0) + 1;
+    var quedan = PIN_INTENTOS - b.fallos;
+    if (quedan <= 0) {
+      b.bloqueos = (b.bloqueos || 0) + 1;
+      b.hasta = ahora + Math.min(15 * Math.pow(2, b.bloqueos - 1), 1440) * 60000;
+      b.fallos = 0;
+    }
+    props.setProperty("PIN_BLOQUEO", JSON.stringify(b));
+    return salida({ ok: false, codigo: "pin_mal", error: quedan > 0
+      ? (quedan === 1 ? "Código incorrecto. Te queda 1 intento." : "Código incorrecto. Te quedan " + quedan + " intentos.")
+      : "Código incorrecto. Por seguridad, el acceso con código queda bloqueado un rato." });
+  }
+  props.deleteProperty("PIN_BLOQUEO");
+  var token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
+  var lista = leerJson(props, "DISPOSITIVOS");
+  lista[huella(token)] = { nombre: String(pet.nombre || "Dispositivo").slice(0, 60), alta: new Date().toISOString().slice(0, 10) };
+  props.setProperty("DISPOSITIVOS", JSON.stringify(lista));
+  return salida({ ok: true, token: token, hoja: SpreadsheetApp.getActiveSpreadsheet().getName(), version: VERSION_SCRIPT });
 }
 
 /* ---------------- censo ---------------- */

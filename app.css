@@ -505,3 +505,6 @@ details.como ol{padding-left:20px; margin:8px 0; font-size:13px; color:var(--ink
 .etq.ok{background:var(--verde-suave); color:var(--verde); border-color:transparent}
 .etq.mal{background:var(--carmin-suave); color:var(--carmin); border-color:transparent}
 .etq.run{background:var(--oro-suave); color:var(--oro); border-color:transparent}
+.pin-fila{display:flex; gap:8px; align-items:stretch; flex-wrap:wrap}
+.pin{width:7.4em; min-width:0; font:500 22px/1.2 "IBM Plex Mono", ui-monospace, monospace; letter-spacing:.3em; text-align:center; padding:8px 10px; border:1px solid var(--linea-fuerte); border-radius:8px; background:var(--surface); color:inherit}
+.pin:focus{outline:2px solid var(--oro); outline-offset:1px}

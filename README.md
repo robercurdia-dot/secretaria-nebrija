@@ -66,7 +66,7 @@ Está desactivado hasta que lo actives tú, una sola vez:
 3. *Implementar → Gestionar implementaciones → ✏ → Nueva versión → Implementar*. Google pedirá el permiso de Drive: *Revisar permisos → tu cuenta → Avanzado → Ir a… → Permitir*.
 4. En la app: **Archivo en Drive → Comprobar**.
 
-Quien tenga la clave (o el código de vinculación) podrá usar tu Drive desde la app. Trátalo como una contraseña y, si dejas de usar la función, pon `DRIVE_ACCESO` en `no`.
+Quien tenga la clave o un dispositivo vinculado con el código de 6 cifras podrá usar tu Drive desde la app. Trátalo como una contraseña y, si dejas de usar la función, pon `DRIVE_ACCESO` en `no`.
 
 ## Pasar lista
 
@@ -105,7 +105,7 @@ Las contraseñas solo viven en los secretos de GitHub; nunca en la app, en la ho
 
 ## Publicar cambios
 
-Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v6` → `secretaria-v7`) para que los móviles descarguen la versión nueva.
+Edita los ficheros en GitHub (o súbelos de nuevo) y cambia el número de `VERSION` en `sw.js` (`secretaria-v7` → `secretaria-v8`) para que los móviles descarguen la versión nueva.
 
 ## Estructura
 

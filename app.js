@@ -1562,20 +1562,25 @@ function pendientesSync(){
 }
 
 /* ---------- conexión con la hoja ---------- */
+// Dirección /exec del script de la Secretaría. No da acceso por sí sola: hace falta el código de 6 cifras.
+var HOJA_CENTRAL="https://script.google.com/macros/s/AKfycby_zDTna8Ju6cCQrcSyiUJyxIror76k1k16rr-oVWDAWEDfASuAkoholxT6su6Yu8YlyA/exec";
 function hojaCfg(){ return S.ajustes.sheets; }
+function hojaUrl(){ return (hojaCfg().url||"").trim() || HOJA_CENTRAL; }
 function hojaConfigurada(){
-  var c=hojaCfg(), u=(c.url||"").trim();
+  var c=hojaCfg(), u=hojaUrl();
   var okUrl = /^https:\/\/script\.google\.com\/.+\/exec/.test(u) ||
               (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^http:\/\/(localhost|127\.0\.0\.1)[:\/]/.test(u));
   return !!(okUrl && (c.token||"").trim());
 }
 function hojaLlamar(accion, datos){
   if(!hojaConfigurada()) return Promise.reject(new Error("Falta configurar la hoja de Google (dirección y clave)."));
-  var c=hojaCfg();
+  return scriptLlamar(hojaUrl(), Object.assign({ accion:accion, token:hojaCfg().token.trim() }, datos||{}));
+}
+function scriptLlamar(url, pet){
   var ctl=("AbortController" in window) ? new AbortController() : null;
   var t=setTimeout(function(){ if(ctl) ctl.abort(); }, 40000);
-  var cuerpo=JSON.stringify(Object.assign({ accion:accion, token:c.token.trim() }, datos||{}));
-  return fetch(c.url.trim(), { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body:cuerpo,
+  var cuerpo=JSON.stringify(pet);
+  return fetch(url, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body:cuerpo,
                                redirect:"follow", signal: ctl ? ctl.signal : undefined })
     .then(function(r){ return r.text(); })
     .then(function(texto){
@@ -2644,37 +2649,29 @@ function censoDesdeHoja(silencioso){
   }).catch(function(err){ if(!silencioso) toast(err.message, "mal"); return false; });
 }
 
-/* ---------- vinculación por código ---------- */
-function b64u(s){ return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
-function ub64(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return decodeURIComponent(escape(atob(s))); }
-function codigoVinculo(){
-  var c=hojaCfg();
-  return "NEB1-"+b64u(JSON.stringify({ u:(c.url||"").trim(), k:(c.token||"").trim() }));
+/* ---------- vinculación con el código de 6 cifras ---------- */
+function nombreDispositivo(){
+  var ua=navigator.userAgent||"";
+  var so=/iPhone/.test(ua)?"iPhone":/iPad/.test(ua)?"iPad":/Android/.test(ua)?"Android":/Mac/.test(ua)?"Mac":/Windows/.test(ua)?"Windows":"Dispositivo";
+  return so+" · "+new Date().toISOString().slice(0,10);
 }
-function leerCodigo(txt){
-  var m=String(txt||"").replace(/\s+/g,"").match(/NEB1-([A-Za-z0-9_\-]+)/);
-  if(!m) return null;
-  try{
-    var d=JSON.parse(ub64(m[1]));
-    if(d && typeof d.u==="string" && typeof d.k==="string" && d.u && d.k) return d;
-  }catch(e){}
-  return null;
-}
-function vincular(txt, estado){
-  var d=leerCodigo(txt);
+function vincularPin(pin, estado){
   var say=function(t, mal){ if(estado){ estado.textContent=t; estado.style.color = mal ? "var(--carmin)" : ""; } else toast(t, mal?"mal":undefined); };
-  if(!d){ say("Ese archivo o código no es válido: tiene que ser el archivo de vinculación generado por la app.", true); return Promise.resolve(false); }
+  pin=String(pin||"").replace(/\D/g,"");
+  if(pin.length!==6){ say("El código tiene 6 cifras.", true); return Promise.resolve(false); }
+  var url=hojaUrl();
+  if(!url){ say("Esta copia de la app no sabe aún la dirección de la Secretaría. Ponla en Ajustes → Hoja de Google → Conexión manual.", true); return Promise.resolve(false); }
   var antes=Object.assign({}, S.ajustes.sheets);
-  S.ajustes.sheets.url=d.u; S.ajustes.sheets.token=d.k;
-  if(!hojaConfigurada()){ S.ajustes.sheets=antes; say("El código no trae una dirección de hoja válida.", true); return Promise.resolve(false); }
-  guardar();
-  say("Conectando con la hoja…");
-  return hojaLlamar("ping").then(function(r){
+  say("Comprobando el código…");
+  return scriptLlamar(url, { accion:"vincular", pin:pin, nombre:nombreDispositivo() }).then(function(r){
+    S.ajustes.sheets.token=r.token;
+    if(url===HOJA_CENTRAL) S.ajustes.sheets.url="";
+    guardar();
     say("Conectado con la hoja «"+(r.hoja||"sin nombre")+"». Trayendo datos…");
     var paso = S.censo.length ? Promise.resolve(true) : censoDesdeHoja(true);
     return paso.then(function(){ return sincronizar(true); }).then(function(){
       pintarAjustesLista(); pintarCenso();
-      say(S.censo.length ? "Vinculado: "+S.censo.length+" colegiales y la lista de asistencia al día." : "Vinculado. La hoja aún no tiene censo: súbelo desde «Pasar lista → Categorías y hoja».");
+      say(S.censo.length ? "Listo: "+S.censo.length+" colegiales y la lista de asistencia al día." : "Listo. La hoja aún no tiene censo: súbelo desde «Pasar lista → Categorías y hoja».");
       if(!estado) toast("Dispositivo vinculado con la hoja.");
       return true;
     });
@@ -2688,54 +2685,15 @@ function copiarTexto(t, boton){
   if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function(){ fallback(t, ok); });
   else fallback(t, ok);
 }
-document.getElementById("vc-vincular").addEventListener("click", function(){
-  vincular(document.getElementById("vc-codigo").value, document.getElementById("vc-estado"));
-});
-document.getElementById("hs-cod-aplicar").addEventListener("click", function(){
-  vincular(document.getElementById("hs-cod-pegar").value, document.getElementById("hs-estado")).then(function(ok){ if(ok) document.getElementById("hs-cod-pegar").value=""; });
-});
-document.getElementById("hs-cod-copiar").addEventListener("click", function(){
-  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
-  copiarTexto(codigoVinculo(), this);
-});
-function archivoVinculo(){
-  var txt="Secretaría Nebrija · archivo de vinculación\r\nNo lo compartas: da acceso a tu hoja de Google. Bórralo después de usarlo.\r\n\r\n"+codigoVinculo()+"\r\n";
-  return new Blob([txt], { type:"text/plain" });
-}
-document.getElementById("hs-cod-compartir").addEventListener("click", function(){
-  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
-  var cod=codigoVinculo();
-  if(navigator.share) navigator.share({ text:cod }).catch(function(){});
-  else copiarTexto(cod, this);
-});
-document.getElementById("hs-cod-archivo-bajar").addEventListener("click", function(){
-  if(!hojaConfigurada()){ document.getElementById("hs-estado").textContent="Primero rellena la dirección y la clave de la hoja."; return; }
-  var blob=archivoVinculo();
-  try{
-    var f=new File([blob], "vinculo-secretaria-nebrija.txt", { type:"text/plain" });
-    if(navigator.canShare && navigator.canShare({ files:[f] })){ navigator.share({ files:[f], title:"Vinculación Secretaría Nebrija" }).catch(function(){}); return; }
-  }catch(e){}
-  descargarBlob(blob, "vinculo-secretaria-nebrija.txt");
-});
-function leerArchivoVinculo(input, estado){
-  var f=input.files[0]; input.value=""; if(!f) return;
-  if(f.size>20000){ estado.textContent="Ese archivo no parece un archivo de vinculación."; estado.style.color="var(--carmin)"; return; }
-  f.text().then(function(t){ return vincular(t, estado); });
-}
-document.getElementById("zona-vc").addEventListener("click", function(e){ if(e.target.tagName!=="INPUT") document.getElementById("vc-archivo").click(); });
-document.getElementById("vc-archivo").addEventListener("change", function(){ leerArchivoVinculo(this, document.getElementById("vc-estado")); });
-document.getElementById("zona-hs-cod").addEventListener("click", function(e){ if(e.target.tagName!=="INPUT") document.getElementById("hs-cod-archivo").click(); });
-document.getElementById("hs-cod-archivo").addEventListener("change", function(){ leerArchivoVinculo(this, document.getElementById("hs-estado")); });
-[["zona-vc","vc-archivo","vc-estado"],["zona-hs-cod","hs-cod-archivo","hs-estado"]].forEach(function(t){
-  var z=document.getElementById(t[0]);
-  z.addEventListener("dragover", function(e){ e.preventDefault(); z.classList.add("hot"); });
-  z.addEventListener("dragleave", function(){ z.classList.remove("hot"); });
-  z.addEventListener("drop", function(e){
-    e.preventDefault(); z.classList.remove("hot");
-    var f=e.dataTransfer.files[0]; if(!f) return;
-    var est=document.getElementById(t[2]);
-    f.text().then(function(txt){ return vincular(txt, est); });
-  });
+[["vc-pin","vc-entrar","vc-estado"],["hs-pin","hs-pin-entrar","hs-estado"]].forEach(function(t){
+  var inp=document.getElementById(t[0]), btn=document.getElementById(t[1]);
+  var ir=function(){
+    btn.disabled=true;
+    vincularPin(inp.value, document.getElementById(t[2])).then(function(ok){ btn.disabled=false; if(ok) inp.value=""; });
+  };
+  btn.addEventListener("click", ir);
+  inp.addEventListener("input", function(){ inp.value=inp.value.replace(/\D/g,"").slice(0,6); });
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); ir(); } });
 });
 
 function ejemploCenso(){
@@ -2940,7 +2898,6 @@ function clupikAuto(accion){
   });
 }
 
-var hashVinc=(location.hash||"").match(/^#vincular=(.+)$/);
 cargar();
 restaurarCampos();
 pintarCenso();
@@ -2949,11 +2906,7 @@ pintarClupik();
 var inicial=(location.hash||"").replace("#","");
 vista(inicial && document.getElementById("v-"+inicial) ? inicial : "resumen");
 etiquetarTablas();
-if(hashVinc){
-  try{ history.replaceState(null, "", location.pathname+location.search); }catch(e){}
-  vista("resumen");
-  setTimeout(function(){ vincular(decodeURIComponent(hashVinc[1])); }, 400);
-} else if(hojaConfigurada() && S.ajustes.sheets.auto){
+if(hojaConfigurada() && S.ajustes.sheets.auto){
   setTimeout(function(){
     (S.censo.length ? Promise.resolve() : censoDesdeHoja(true)).then(function(){ return sincronizar(true); });
   }, 1200);

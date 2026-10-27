@@ -111,15 +111,12 @@
           <button class="btn" data-ir-censo="ejemplo">Probar con datos de ejemplo</button>
         </div>
         <div class="vinculo">
-          <div class="zona" id="zona-vc" style="margin-bottom:8px">
-            <b>¿Ya la usas en otro dispositivo?</b>
-            Toca aquí y elige el archivo de vinculación
-            <input type="file" id="vc-archivo" accept=".txt,.nebrija,text/plain" hidden>
+          <h4>¿Eres de la Secretaría?</h4>
+          <p class="nota" style="margin-top:0">Escribe el código de 6 cifras y este dispositivo traerá los datos de la hoja.</p>
+          <div class="pin-fila">
+            <input id="vc-pin" class="pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="••••••" aria-label="Código de 6 cifras">
+            <button class="btn p" id="vc-entrar" type="button">Entrar</button>
           </div>
-          <details class="como"><summary>¿Prefieres pegar el código?</summary>
-            <div class="campo" style="margin-top:8px"><input id="vc-codigo" type="text" placeholder="NEB1-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-            <button class="btn" id="vc-vincular" type="button">Vincular con el código</button>
-          </details>
           <p class="nota" id="vc-estado" style="margin:8px 0 0"></p>
         </div>
       </div>
@@ -252,10 +249,18 @@
           <div class="panel">
             <h3>Hoja de Google</h3>
             <p class="nota" style="margin-top:0">Conecta una hoja de cálculo tuya para guardar la asistencia, compartirla entre varios móviles y traer el censo. Hace falta crear una vez un pequeño script (2 minutos).</p>
-            <div class="campo"><label for="hs-url">Dirección de la aplicación web (termina en /exec)</label>
-              <input id="hs-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-            <div class="campo"><label for="hs-token">Clave de acceso (la misma que pusiste en el script)</label>
-              <input id="hs-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+            <div class="pin-fila">
+              <input id="hs-pin" class="pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="••••••" aria-label="Código de 6 cifras">
+              <button class="btn p" id="hs-pin-entrar" type="button">Vincular este dispositivo</button>
+            </div>
+            <p class="nota">Cada móvil u ordenador se vincula una vez con el código de 6 cifras de la Secretaría. Tras 5 fallos seguidos el código se bloquea un rato.</p>
+            <details class="como">
+              <summary>Conexión manual (solo si usas otra hoja)</summary>
+              <div class="campo" style="margin-top:8px"><label for="hs-url">Dirección de la aplicación web (termina en /exec)</label>
+                <input id="hs-url" type="url" inputmode="url" placeholder="Por defecto, la de la Secretaría" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+              <div class="campo"><label for="hs-token">Clave de acceso (la propiedad CLAVE del script)</label>
+                <input id="hs-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+            </details>
             <label class="fila-sel" style="border:0; padding:4px 0 10px"><input type="checkbox" id="hs-auto"><span>Sincronizar solo, al marcar o al volver la conexión</span></label>
             <div class="barra">
               <button class="btn p" id="hs-probar" type="button">Probar conexión</button>
@@ -266,32 +271,14 @@
               <button class="btn" id="hs-censo-subir" type="button">Subir el censo a la hoja</button>
             </div>
             <p class="nota" id="hs-estado"></p>
-            <div class="vinculo">
-              <h4>Vincular otro móvil o la app instalada</h4>
-              <p class="nota" style="margin-top:0">El archivo de vinculación lleva la dirección y la clave: súbelo en el otro dispositivo y se conecta y trae el censo solo. En iPhone, la app de la pantalla de inicio no comparte datos con Safari, así que hay que vincularla una vez desde dentro. Trátalo como una contraseña: envíalo solo por un chat privado y bórralo después.</p>
-              <div class="barra">
-                <button class="btn p" id="hs-cod-archivo-bajar" type="button">Descargar archivo de vinculación</button>
-                <button class="btn" id="hs-cod-copiar" type="button">Copiar código</button>
-                <button class="btn" id="hs-cod-compartir" type="button">Compartir…</button>
-              </div>
-              <div class="zona" id="zona-hs-cod" style="margin:6px 0 8px">
-                <b>Vincular este dispositivo</b>
-                Toca aquí y elige el archivo de vinculación
-                <input type="file" id="hs-cod-archivo" accept=".txt,.nebrija,text/plain" hidden>
-              </div>
-              <details class="como"><summary>¿Prefieres pegar el código?</summary>
-                <div class="campo" style="margin-top:8px"><input id="hs-cod-pegar" type="text" placeholder="NEB1-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-                <button class="btn" id="hs-cod-aplicar" type="button">Vincular con el código</button>
-              </details>
-            </div>
-            <details class="como">
+                        <details class="como">
               <summary>Cómo crear la conexión (una sola vez)</summary>
               <ol>
                 <li>Crea una hoja de cálculo nueva en Google Sheets (o abre la tuya).</li>
                 <li>Menú <b>Extensiones → Apps Script</b>. Borra lo que haya y pega el código de abajo.</li>
-                <li>En Apps Script: <b>Configuración del proyecto (⚙) → Propiedades de la secuencia de comandos → Añadir propiedad</b>: nombre <span class="mono">CLAVE</span>, valor la clave que quieras (la misma que pondrás aquí arriba).</li>
+                <li>En Apps Script: <b>Configuración del proyecto (⚙) → Propiedades de la secuencia de comandos → Añadir propiedad</b>: nombre <span class="mono">CLAVE</span>, valor una clave larga que quieras; y otra, nombre <span class="mono">PIN</span>, valor el código de 6 cifras con el que se vincularán los dispositivos.</li>
                 <li><b>Implementar → Nueva implementación → Aplicación web</b>. «Ejecutar como»: <i>Yo</i>. «Quién tiene acceso»: <i>Cualquier usuario</i>. Autoriza los permisos.</li>
-                <li>Copia la dirección que termina en <span class="mono">/exec</span> y pégala arriba.</li>
+                <li>Copia la dirección que termina en <span class="mono">/exec</span> y pégala en «Conexión manual».</li>
               </ol>
               <div class="barra" style="margin:8px 0 0"><button class="btn" id="hs-copiar-codigo" type="button">Copiar el código del script</button></div>
               <p class="nota">Si más adelante cambias el código, hay que crear una <b>nueva versión</b> de la implementación. La hoja crea sola las pestañas «Censo», «Categorías», «Sesiones», «Asistencia» y «Totales».</p>
