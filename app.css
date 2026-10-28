@@ -1,39 +1,40 @@
 :root{
-  --ground:#FBF7F5; --surface:#FFFFFF; --surface-2:#F5EEEB;
-  --ink:#241A1A; --ink-soft:#6E5D5C; --ink-faint:#988785;
-  --linea:#E7DAD6; --linea-fuerte:#D3C0BB;
-  --carmin:#A81C24; --carmin-suave:#F6EAEA; --oro:#B8912F; --oro-suave:#F7EFDC;
-  --verde:#1F6A45; --verde-suave:#E7F1EB; --alerta:#B0521B; --alerta-suave:#FBEEE4;
-  --sombra:0 1px 2px rgba(60,25,25,.06), 0 8px 24px -18px rgba(60,25,25,.35);
-  --r:10px;
+  --ground:#F2F2F7; --surface:#FFFFFF; --surface-2:#F2F2F7;
+  --ink:#1C1C1E; --ink-soft:#6C6C70; --ink-faint:#8E8E93;
+  --linea:#E5E5EA; --linea-fuerte:#C7C7CC;
+  --carmin:#A81C24; --carmin-suave:#F7E8E9; --oro:#B26B00; --oro-suave:#FFF4E0;
+  --verde:#248A3D; --verde-suave:#E6F4EA; --alerta:#C93400; --alerta-suave:#FFEDE5;
+  --sombra:none;
+  --r:12px;
+  --fuente:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --ground:#15100F; --surface:#1E1817; --surface-2:#272020;
-    --ink:#F3EAE7; --ink-soft:#B6A29F; --ink-faint:#8A7876;
-    --linea:#362B2A; --linea-fuerte:#4A3B39;
-    --carmin:#E8737A; --carmin-suave:#33191B; --oro:#D7B15C; --oro-suave:#2E2517;
-    --verde:#5FB98B; --verde-suave:#17281F; --alerta:#DE8C52; --alerta-suave:#2C1D13;
-    --sombra:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -18px rgba(0,0,0,.8);
+    --ground:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E;
+    --ink:#F2F2F7; --ink-soft:#AEAEB2; --ink-faint:#8E8E93;
+    --linea:#38383A; --linea-fuerte:#48484A;
+    --carmin:#FF6961; --carmin-suave:#3A1D1E; --oro:#FFB340; --oro-suave:#33270F;
+    --verde:#30D158; --verde-suave:#16291B; --alerta:#FF8A5C; --alerta-suave:#33201A;
+    --sombra:none;
   }
 }
 :root[data-theme="dark"]{
-  --ground:#15100F; --surface:#1E1817; --surface-2:#272020;
-  --ink:#F3EAE7; --ink-soft:#B6A29F; --ink-faint:#8A7876;
-  --linea:#362B2A; --linea-fuerte:#4A3B39;
-  --carmin:#E8737A; --carmin-suave:#33191B; --oro:#D7B15C; --oro-suave:#2E2517;
-  --verde:#5FB98B; --verde-suave:#17281F; --alerta:#DE8C52; --alerta-suave:#2C1D13;
-  --sombra:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -18px rgba(0,0,0,.8);
+  --ground:#000000; --surface:#1C1C1E; --surface-2:#2C2C2E;
+  --ink:#F2F2F7; --ink-soft:#AEAEB2; --ink-faint:#8E8E93;
+  --linea:#38383A; --linea-fuerte:#48484A;
+  --carmin:#FF6961; --carmin-suave:#3A1D1E; --oro:#FFB340; --oro-suave:#33270F;
+  --verde:#30D158; --verde-suave:#16291B; --alerta:#FF8A5C; --alerta-suave:#33201A;
+  --sombra:none;
 }
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{
   margin:0; background:var(--ground); color:var(--ink);
-  font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
-  font-size:15px; line-height:1.5;
+  font-family:var(--fuente);
+  font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3{font-family:Spectral,Georgia,"Times New Roman",serif; font-weight:600; text-wrap:balance; margin:0}
+h1,h2,h3{font-family:var(--fuente); font-weight:700; letter-spacing:-.01em; text-wrap:balance; margin:0}
 button,input,select,textarea{font:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--carmin); outline-offset:2px; border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
@@ -508,3 +509,48 @@ details.como ol{padding-left:20px; margin:8px 0; font-size:13px; color:var(--ink
 .pin-fila{display:flex; gap:8px; align-items:stretch; flex-wrap:wrap}
 .pin{width:7.4em; min-width:0; font:500 22px/1.2 "IBM Plex Mono", ui-monospace, monospace; letter-spacing:.3em; text-align:center; padding:8px 10px; border:1px solid var(--linea-fuerte); border-radius:8px; background:var(--surface); color:inherit}
 .pin:focus{outline:2px solid var(--oro); outline-offset:1px}
+
+/* ---------- estilo sencillo (tipo app del sistema): sin mayúsculas espaciadas ni tipografías de adorno ---------- */
+.marca .t,.topbar .tt,.tarjeta .v,.sesion-cab .t,.contador b,.bombo-nombre{font-family:var(--fuente)}
+.marca .t{font-weight:700}
+.marca .s,.grupo > .et,.tarjeta .k,.campo label,.contador span,.cuarto .nota-hab{text-transform:none; letter-spacing:0}
+.marca .s{font-size:12px}
+.grupo > .et{font-size:13px; font-weight:600; color:var(--ink-soft); padding:0 9px}
+.nav{font-size:15px; padding:8px 10px}
+.cabecera h1{font-size:28px}
+.cabecera p{font-size:15px}
+.tarjeta .k{font-size:13px; color:var(--ink-soft)}
+.tarjeta .v{font-size:28px; font-weight:700}
+.campo label{font-size:13px; color:var(--ink-soft); font-weight:500}
+thead th{text-transform:none; letter-spacing:0; font-size:13px; font-weight:600}
+table{font-size:14px}
+table.cards td::before{text-transform:none!important; letter-spacing:0!important; font-size:13px!important}
+.panel,.caja,.tarjeta{border:0; box-shadow:none}
+.panel h3{font-size:17px}
+.toast{border:0; box-shadow:0 4px 20px rgba(0,0,0,.12)}
+.btn{border-radius:10px; font-weight:500}
+.chip{font-weight:500}
+.mono,.pin{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.sesion-cab .t{font-weight:600}
+.accesos{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px}
+@media (max-width:860px){
+  .accesos{grid-template-columns:1fr 1fr}
+  /* Listado de colegiales: filas compactas tipo agenda (nombre arriba; habitación, DNI y teléfono debajo) */
+  #tabla-censo tr{display:flex; flex-wrap:wrap; align-items:baseline; column-gap:6px; row-gap:1px; padding:10px 14px}
+  #tabla-censo td{display:block; padding:0; border:0; font-size:16px}
+  #tabla-censo td::before{display:none}
+  #tabla-censo td:nth-child(2)::after{content:","}
+  #tabla-censo td:nth-child(1){display:none}
+  #tabla-censo tr::after{content:""; flex-basis:100%; height:0; order:3}
+  #tabla-censo td:nth-child(n+4){font-size:13px; color:var(--ink-soft); font-family:var(--fuente)}
+  #tabla-censo td:nth-child(5){order:4} #tabla-censo td:nth-child(6){order:5} #tabla-censo td:nth-child(4){order:6}
+  #tabla-censo td:nth-child(5)::before{display:inline; content:"Hab. "}
+  #tabla-censo td:nth-child(6)::before{display:inline; content:"· DNI "}
+  #tabla-censo td:nth-child(4)::before{display:inline; content:"· Tel. "}
+  #tabla-censo td[colspan]{flex:1 0 100%}
+  .zona-acc .btn{flex:1 1 40%}
+  .cabecera{margin-bottom:12px}
+  .cabecera p{display:none}
+  .topbar{background:color-mix(in srgb, var(--surface) 88%, transparent); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px)}
+  .topbar .tt{font-size:17px; font-weight:600; text-align:center}
+}

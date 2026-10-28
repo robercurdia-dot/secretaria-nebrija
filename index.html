@@ -14,9 +14,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Secretaría">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -97,14 +94,14 @@
       <div class="cabecera">
         <div>
           <h1>Resumen</h1>
-          <p>Panorama del curso y de lo que la Secretaría ya resuelve de forma automática.</p>
+          
         </div>
         <div class="estado" id="resumen-estado"></div>
       </div>
 
       <div class="panel inicio-vacio" id="inicio-vacio" hidden>
-        <h3>Empieza cargando el censo</h3>
-        <p class="nota" style="margin:0 0 12px; font-size:13.5px">La página no trae ningún dato personal: los colegiales se cargan desde tu Excel o tu hoja de Google y se quedan solo en este dispositivo.</p>
+        <h3>Cargar el censo</h3>
+        <p class="nota" style="margin:0 0 12px">Los datos se quedan en este dispositivo.</p>
         <div class="barra" style="margin-bottom:0">
           <button class="btn p" data-ir-censo="fichero">Cargar un Excel o CSV</button>
           <button class="btn" data-ir-censo="hoja">Traer de mi hoja de Google</button>
@@ -130,33 +127,11 @@
 
       <div class="tarjetas" id="tarjetas-resumen"></div>
 
-      <div class="dos">
-        <div class="panel">
-          <h3>Lo que ya hace esta herramienta</h3>
-          <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px; font-size:13.5px; color:var(--ink-soft)">
-            <li>Pasa lista desde el móvil por categorías que configuras tú, calcula los puntos y lo sincroniza con tu hoja de Google.</li>
-            <li>Unifica listados de varios ficheros en un único censo, detectando duplicados y casos dudosos.</li>
-            <li>Valida DNI/NIE, teléfonos y habitaciones, y avisa de qué queda por revisar.</li>
-            <li>Genera certificados de residencia y carteles con QR listos para imprimir.</li>
-            <li>Prepara las altas de clubes deportivos para Clupik, con las reglas de email y perfil ya fijadas.</li>
-            <li>Redacta y envía mensajes de WhatsApp personalizados por grupos (anuario, datos, puntos…).</li>
-          </ul>
-        </div>
-        <div class="panel">
-          <h3>Cómo se usa en el móvil</h3>
-          <ul style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:7px; font-size:13.5px; color:var(--ink-soft)">
-            <li>Ábrela en el navegador del móvil y usa «Añadir a pantalla de inicio» (iPhone) o «Instalar app» (Android): se abre como una aplicación y funciona sin conexión.</li>
-            <li>Los datos se guardan en el propio dispositivo. Para tenerlos a salvo y compartirlos entre móviles, conecta tu hoja de Google en <b>Pasar lista → Categorías y hoja</b>.</li>
-            <li>La lista de asistencia se marca con un toque por persona y se sube a la hoja al terminar.</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="barra" style="margin-top:16px">
+      <div class="barra accesos" style="margin-top:16px">
         <button class="btn p" data-ir="lista">Pasar lista</button>
-        <button class="btn" data-ir="censo">Ir al listado de colegiales</button>
-        <button class="btn" data-ir="clupik">Ir a clubes → Clupik</button>
-        <button class="btn" data-ir="mensajes">Ir a mensajes de WhatsApp</button>
+        <button class="btn" data-ir="censo">Colegiales</button>
+        <button class="btn" data-ir="clupik">Clupik</button>
+        <button class="btn" data-ir="mensajes">WhatsApp</button>
       </div>
     </section>
 
@@ -165,7 +140,7 @@
       <div class="cabecera">
         <div>
           <h1>Pasar lista</h1>
-          <p>Marca la asistencia con un toque por persona, por las categorías que tú definas. Funciona sin conexión y se sincroniza con tu hoja de Google.</p>
+          <p>Asistencia por categorías. Se guarda en la hoja.</p>
         </div>
         <div class="estado" id="lista-estado"></div>
       </div>
@@ -310,7 +285,7 @@
       <div class="cabecera">
         <div>
           <h1>Listado de colegiales</h1>
-          <p>La hoja maestra del curso. Todo lo demás —certificados, carteles, mensajes— sale de aquí.</p>
+          <p>Colegiales del curso.</p>
         </div>
         <div class="estado" id="estado"></div>
       </div>
@@ -339,7 +314,7 @@
     <section class="vista" id="v-unificar">
       <div class="cabecera"><div>
         <h1>Unificar listados</h1>
-        <p>Junta varias fuentes en un censo único: combina los nombres, descarta repetidos y avisa de los casos que se parecen sin ser la misma persona.</p>
+        <p>Junta varios listados en uno y quita repetidos.</p>
       </div></div>
 
         <div class="panel">
@@ -368,7 +343,7 @@
     <section class="vista" id="v-drive">
       <div class="cabecera"><div>
         <h1>Archivo en Drive</h1>
-        <p>Navega por tu Google Drive, busca, mueve y renombra archivos, y usa un Excel o una hoja de Drive como censo, puntos o fuente para unificar.</p>
+        <p>Archivos del Drive del Colegio.</p>
       </div>
       <div class="estado"><span class="chip demo" id="drive-chip"><span class="punto"></span>Sin conectar</span></div></div>
 
@@ -434,7 +409,7 @@
     <section class="vista" id="v-actualizar">
       <div class="cabecera"><div>
         <h1>Actualizar documentos</h1>
-        <p>Cambia nombres, fechas o cursos en un documento: tú indicas qué buscar y por qué sustituirlo. Se guarda una copia nueva y el original no se toca.</p>
+        <p>Cambia textos de un documento. Se guarda como copia.</p>
       </div></div>
 
       <div class="panel">
@@ -464,7 +439,7 @@
     <section class="vista" id="v-validar">
       <div class="cabecera"><div>
         <h1>Validación de datos</h1>
-        <p>Repasa el censo entero: letra de control del DNI, formato de los NIE, documentos repetidos y fichas incompletas.</p>
+        <p>Revisa DNI, NIE y fichas incompletas.</p>
       </div></div>
       <div class="tarjetas" id="tarjetas-val"></div>
       <div id="res-val"></div>
@@ -474,7 +449,7 @@
     <section class="vista" id="v-habitaciones">
       <div class="cabecera"><div>
         <h1>Habitaciones</h1>
-        <p>El censo ordenado por número de habitación, con las dobles agrupadas.</p>
+        <p>Colegiales por habitación.</p>
       </div></div>
       <div class="tarjetas" id="tarjetas-hab"></div>
       <div class="barra">
@@ -488,7 +463,7 @@
     <section class="vista" id="v-plano">
       <div class="cabecera"><div>
         <h1>Plano del Colegio</h1>
-        <p>El cuadro de habitaciones tal cual está en pared, pero vivo: cada cuarto con quien lo ocupa este curso. Pulsa una habitación para ver la ficha, arrastra un nombre a otra habitación para moverlo, o haz doble clic sobre él para corregirlo.</p>
+        <p>Quién ocupa cada habitación.</p>
       </div>
       <div class="estado" id="plano-estado"></div>
       </div>
@@ -514,7 +489,7 @@
     <section class="vista" id="v-certificados">
       <div class="cabecera"><div>
         <h1>Certificados de residencia</h1>
-        <p>Un certificado por colegial sobre la plantilla del Colegio, con el nombre completo, el documento y la concordancia de género.</p>
+        <p>Certificados de residencia para imprimir.</p>
       </div></div>
       <div class="dos">
         <div class="panel">
@@ -543,7 +518,7 @@
     <section class="vista" id="v-carteles">
       <div class="cabecera"><div>
         <h1>Carteles con QR</h1>
-        <p>Cartel A4 con el escudo y un código QR: formulario de bienvenida, grupo de WhatsApp o cualquier enlace.</p>
+        <p>Cartel A4 con escudo y código QR.</p>
       </div></div>
       <div class="dos">
         <div class="panel">
@@ -586,7 +561,7 @@
     <section class="vista" id="v-puntos">
       <div class="cabecera"><div>
         <h1>Puntos y créditos</h1>
-        <p>Convierte los puntos de participación en créditos según los tramos del Colegio y muestra quién se queda corto.</p>
+        <p>Puntos de participación y créditos.</p>
       </div></div>
 
       <div class="aviso oro"><span class="punto" style="margin-top:7px"></span>
@@ -612,7 +587,7 @@
     <section class="vista" id="v-anuario">
       <div class="cabecera"><div>
         <h1>Anuario del curso</h1>
-        <p>Seguimiento de lo que hay que recoger de cada colegial y plantillas de la orla. El montaje de las páginas vendrá después; lo que atasca un anuario es perseguir 114 fotos.</p>
+        <p>Lo que falta por recoger para el anuario.</p>
       </div></div>
 
       <div class="tarjetas" id="tarjetas-anu"></div>
@@ -640,7 +615,7 @@
     <section class="vista" id="v-sorteo">
       <div class="cabecera"><div>
         <h1>Sorteos</h1>
-        <p>Para repartir turnos, elegir orden de habitaciones o rifar lo que toque: el bombo saca un nombre entre los colegiales del curso.</p>
+        <p>Saca un nombre al azar.</p>
       </div>
       <div class="estado" id="sorteo-estado"></div>
       </div>
@@ -687,7 +662,7 @@
     <section class="vista" id="v-mensajes">
       <div class="cabecera"><div>
         <h1>Mensajes por WhatsApp</h1>
-        <p>Escribe el mensaje una vez, elige a quién va y lánzalo. Cada envío sale de tu propio WhatsApp, ya personalizado y listo para enviar.</p>
+        <p>Mensajes de WhatsApp personalizados.</p>
       </div></div>
 
       <div class="dos">
@@ -742,7 +717,7 @@
     <section class="vista" id="v-clupik">
       <div class="cabecera"><div>
         <h1>Clubes → Clupik</h1>
-        <p>Pega la lista de quienes se apuntaron y prepara cada alta con las reglas acordadas: correo fijo y teléfono en blanco solo cuando haga falta un perfil nuevo, sin tocar nunca los perfiles que ya existen. Vale para cualquier club deportivo — elige la modalidad en cada ficha o fila.</p>
+        <p>Altas de clubes deportivos en Clupik.</p>
       </div></div>
 
       <div class="aviso oro"><span class="punto" style="margin-top:7px"></span>
@@ -799,7 +774,7 @@
     <section class="vista" id="v-auto">
       <div class="cabecera"><div>
         <h1>Automatización</h1>
-        <p>Tareas que hace un navegador automático en un repositorio privado de GitHub —por ejemplo, las altas en Clupik— sin que tengas que abrir Chrome. Los datos viajan solo entre la app, tu hoja de Google y el ejecutor.</p>
+        <p>Tareas automáticas, como las altas en Clupik.</p>
       </div>
       <div class="estado"><span class="chip demo" id="auto-chip"><span class="punto"></span>Sin conectar</span></div></div>
 

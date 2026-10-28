@@ -469,7 +469,7 @@ function fichaHab(nombreHab){
     gente.forEach(function(p){
       var falta=faltaSecretaria(p);
       h+='<div style="padding:10px 0; border-bottom:1px solid var(--linea)">'+
-         '<div style="font-family:Spectral,serif; font-size:17px">'+esc(nombreCompleto(p))+'</div>'+
+         '<div style="font-size:17px; font-weight:600">'+esc(nombreCompleto(p))+'</div>'+
          '<div style="font-size:13px; color:var(--ink-soft); margin-top:3px">'+
          (p.estudios? esc(p.estudios)+' · ':'')+'<span class="mono">'+esc(p.tel||"sin teléfono")+'</span>'+
          (p.dni? ' · <span class="mono">'+esc(p.dni)+'</span>':'')+'</div>'+
