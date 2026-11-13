@@ -249,7 +249,7 @@ function pintarCenso(){
   var h='<thead><tr><th class="num">#</th><th>Apellidos</th><th>Nombre</th><th>Teléfono</th><th>Habitación</th><th>DNI</th></tr></thead><tbody>';
   datos.forEach(function(p,i){
     var d=docInfo(p.dni);
-    h+='<tr><td class="num" style="color:var(--ink-faint)">'+(i+1)+'</td>'+
+    h+='<tr class="fila-ficha" tabindex="0" data-ficha="'+S.censo.indexOf(p)+'"><td class="num" style="color:var(--ink-faint)">'+(i+1)+'</td>'+
        '<td><strong>'+esc(apellidos(p))+'</strong></td><td>'+esc(titulo(p.nom))+'</td>'+
        '<td class="mono">'+(p.tel?esc(p.tel):'<span class="vacio">—</span>')+'</td>'+
        '<td class="hab">'+(p.hab?esc(p.hab):'<span class="vacio">—</span>')+'</td>'+
@@ -264,7 +264,156 @@ function pintarCenso(){
   }
   document.getElementById("tabla-censo").innerHTML=h+"</tbody>";
   pintarHabitaciones(); pintarValidacion(); pintarCertLista(); pintarPuntos(); pintarAnuario(); pintarMensajes(); pintarPlano(); pintarSorteo(); pintarResumen(); pintarLista();
+  pintarFicha();
 }
+
+/* ---------- ficha del colegial ---------- */
+var FICHA={ p:null };
+function cambiarHab(p, num){
+  var antes=p.hab;
+  p.hab=String(num);
+  guardar();
+  return antes;
+}
+function clupikDe(p){
+  var dni=norm(p.dni||"").replace(/\s/g,""), k=claveP(p);
+  return S.clupik.filter(function(c){
+    var d=norm(c.dni||"").replace(/\s/g,"");
+    return dni ? d===dni : claveP(c)===k;
+  });
+}
+function asistenciaDe(p){
+  var k=claveP(p), r={ P:0, A:0, J:0, total:S.lista.sesiones.length, sesiones:[], porCat:{} };
+  S.lista.sesiones.forEach(function(x){
+    var e=x.marcas[k]||"";
+    if(e) r[e]++;
+    var c=r.porCat[x.cat] || (r.porCat[x.cat]={ P:0, total:0, pts:0 });
+    c.total++;
+    if(e==="P"){ c.P++; c.pts+=puntosSesion(x); }
+    r.sesiones.push({ fecha:x.fecha, cat:x.cat, titulo:x.titulo||"", e:e });
+  });
+  r.sesiones.sort(function(a,b){ return String(b.fecha).localeCompare(String(a.fecha)); });
+  return r;
+}
+/* los mismos puntos que muestra «Puntos y créditos», con su procedencia */
+function puntosFicha(p){
+  if(S.puntosLista) return { v:String(totalPuntos(p)), fuente:"según Pasar lista" };
+  if(S.puntos.length){
+    var k=claveP(p), x=S.puntos.filter(function(q){ return claveP(q)===k; })[0];
+    return x && x.puntos!=="" && x.puntos!=null ? { v:x.puntos, fuente:"según el fichero de puntos" } : { v:"", fuente:"" };
+  }
+  return p.puntos!=="" && p.puntos!=null ? { v:p.puntos, fuente:"según el censo" } : { v:"", fuente:"" };
+}
+function abrirFicha(p){
+  if(!p) return;
+  FICHA.p=p;
+  document.body.classList.add("fcol-abierta");
+  pintarFicha();
+  var x=document.getElementById("fcol-cerrar"); if(x) x.focus();
+}
+function cerrarFicha(){
+  if(!FICHA.p) return;
+  FICHA.p=null;
+  document.body.classList.remove("fcol-abierta");
+}
+function filaDato(et, valor, mono){
+  return '<div class="fcol-dato"><span>'+et+'</span><b'+(mono?' class="mono"':'')+'>'+
+         (valor ? esc(valor) : '<span class="vacio">—</span>')+'</b></div>';
+}
+function pintarFicha(){
+  var caja=document.getElementById("fcol-cuerpo");
+  if(!caja || !FICHA || !FICHA.p) return;
+  var p=FICHA.p;
+  if(S.censo.indexOf(p)<0){ cerrarFicha(); return; }
+  var falta=faltaSecretaria(p), d=docInfo(p.dni), pab=pabellon(p), tel=telefonoWa(p.tel);
+  var h='<div class="fcol-cab"><div><h2>'+esc(nombreCompleto(p))+'</h2><p>'+
+        (p.hab ? 'Habitación <b class="hab">'+esc(p.hab)+'</b>'+(pab?' · '+esc(pab):'') : 'Sin habitación')+
+        (p.estudios ? ' · '+esc(p.estudios) : '')+'</p></div></div>';
+  if(falta.length) h+='<div style="margin:0 0 12px"><span class="pill av">falta '+esc(falta.join(", "))+'</span></div>';
+
+  h+='<div class="barra fcol-acc">'+
+     (tel ? '<button class="btn" type="button" data-fcol="wa">Escribir por WhatsApp</button>' : '')+
+     '<button class="btn" type="button" data-fcol="cert">Certificado de residencia</button></div>';
+
+  h+='<section class="fcol-sec"><h3>Datos</h3>'+
+     filaDato("Teléfono", p.tel, true)+
+     filaDato("Correo", p.email)+
+     '<div class="fcol-dato"><span>DNI</span><b class="mono">'+(p.dni?esc(p.dni):'<span class="vacio">—</span>')+
+       (p.dni && d.estado==="letra" ? ' <span class="pill mal">letra</span>' : '')+'</b></div>'+
+     filaDato("Estudios", p.estudios)+
+     '<div class="barra" style="margin:10px 0 0"><input class="busca" id="fcol-hab" type="text" inputmode="numeric" placeholder="Pasar a la habitación nº…" style="max-width:190px">'+
+     '<button class="btn" type="button" data-fcol="mover">Mover</button></div></section>';
+
+  var a=asistenciaDe(p), pts=puntosFicha(p);
+  h+='<section class="fcol-sec"><h3>Puntos y asistencia</h3><div class="tarjetas fcol-tarj">'+
+     tarjeta("Puntos", pts.v!==""&&pts.v!=null ? pts.v : "—",
+             pts.fuente ? creditos(pts.v)+" crédito"+(creditos(pts.v)===1?"":"s")+" · "+pts.fuente : "sin registrar", "")+
+     tarjeta("Presente", a.P, a.total ? "de "+a.total+" sesiones" : "sin sesiones", a.P?"ok":"")+
+     tarjeta("Ausente", a.A, a.J ? a.J+" justificada"+(a.J===1?"":"s") : "", a.A?"av":"")+
+     '</div>';
+  var cats=S.lista.categorias.filter(function(c){ return a.porCat[c.id]; });
+  if(cats.length){
+    h+='<table class="fcol-tabla"><thead><tr><th>Categoría</th><th class="num">Presente</th><th class="num">Puntos en lista</th></tr></thead><tbody>'+
+       cats.map(function(c){ var x=a.porCat[c.id];
+         return '<tr><td>'+esc(c.nombre)+'</td><td class="num">'+x.P+' / '+x.total+'</td><td class="num">'+redondear(x.pts)+'</td></tr>'; }).join("")+
+       '</tbody></table>';
+  }
+  if(a.sesiones.length){
+    var est={P:["ok","presente"],A:["av","ausente"],J:["neutro","justificada"]};
+    var ult=a.sesiones.slice(0,8);
+    h+='<div class="fcol-ses">'+ult.map(function(s){
+         var e=est[s.e];
+         return '<div><span>'+esc(fechaLarga(s.fecha))+' · '+esc(nombreCat(s.cat))+(s.titulo?' · '+esc(s.titulo):'')+'</span>'+
+                (e ? '<span class="pill '+e[0]+'">'+e[1]+'</span>' : '<span class="pill neutro">sin marcar</span>')+'</div>';
+       }).join("")+'</div>';
+    if(a.sesiones.length>ult.length) h+='<p class="nota">Últimas '+ult.length+' de '+a.sesiones.length+' sesiones.</p>';
+  }
+  h+='</section>';
+
+  var cl=clupikDe(p);
+  h+='<section class="fcol-sec"><h3>Clubes</h3>'+
+     (cl.length ? cl.map(function(c){
+        return '<div class="fcol-dato"><span>'+esc(clupikModalidad(c).label)+(c.genero==="F"?' femenino':' masculino')+'</span><b>'+esc(clupikEtiqueta(c.estado))+'</b></div>';
+      }).join("") : '<p class="nota">No está en la lista de Clupik.</p>')+
+     '</section>';
+
+  if(S.enviados[claveP(p)]) h+='<p class="nota">Ya se le escribió por WhatsApp en la tanda actual.</p>';
+  caja.innerHTML=h;
+}
+document.getElementById("tabla-censo").addEventListener("click", function(e){
+  var tr=e.target.closest("tr[data-ficha]"); if(!tr) return;
+  abrirFicha(S.censo[+tr.dataset.ficha]);
+});
+document.getElementById("tabla-censo").addEventListener("keydown", function(e){
+  if(e.key!=="Enter" && e.key!==" ") return;
+  var tr=e.target.closest("tr[data-ficha]"); if(!tr) return;
+  e.preventDefault(); abrirFicha(S.censo[+tr.dataset.ficha]);
+});
+document.getElementById("fcol-fondo").addEventListener("click", function(e){ if(e.target===this) cerrarFicha(); });
+document.getElementById("fcol-cerrar").addEventListener("click", cerrarFicha);
+document.addEventListener("keydown", function(e){ if(e.key==="Escape" && FICHA.p) cerrarFicha(); });
+document.getElementById("fcol-cuerpo").addEventListener("click", function(e){
+  var b=e.target.closest("button[data-fcol]"); if(!b || !FICHA.p) return;
+  var p=FICHA.p, que=b.dataset.fcol;
+  if(que==="wa"){ abrirWhatsApp(p); return; }
+  if(que==="cert"){
+    var i=S.censo.indexOf(p);
+    S.censo.forEach(function(_,k){ S.sel[k]= k===i; });
+    cerrarFicha(); pintarCertLista(); vista("certificados");
+    return;
+  }
+  if(que==="mover"){
+    var num=parseInt(document.getElementById("fcol-hab").value,10);
+    if(!num){ toast("Escribe el número de la habitación a la que pasa."); return; }
+    if(String(num)===String(p.hab)){ toast(nombreCompleto(p)+" ya está en la habitación "+num+"."); return; }
+    var antes=cambiarHab(p, num);
+    pintarCenso();
+    toast(nombreCompleto(p)+" pasa a la habitación "+num+(antes?" (antes "+antes+")":"")+".");
+  }
+});
+document.getElementById("fcol-cuerpo").addEventListener("keydown", function(e){
+  if(e.key==="Enter" && e.target.id==="fcol-hab"){ e.preventDefault(); var b=document.querySelector('#fcol-cuerpo button[data-fcol="mover"]'); if(b) b.click(); }
+});
 
 /* ---------- unificar ---------- */
 function claveP(p){ return norm([p.a1,p.a2,p.nom].join(" ")).split(" ").sort().join(" "); }
@@ -1238,10 +1387,9 @@ document.getElementById("plano-lienzo").addEventListener("drop", function(e){
   var idx=+e.dataTransfer.getData("text/plain"), p=S.censo[idx];
   var num=numHab(b.dataset.hab);
   if(!p || !num) return;
-  var antes=p.hab;
-  if(String(num)===String(antes)) return;
-  p.hab=String(num);
-  guardar(); pintarCenso();
+  if(String(num)===String(p.hab)) return;
+  var antes=cambiarHab(p, num);
+  pintarCenso();
   toast(nombreCompleto(p)+" trasladado a la habitación "+num+(antes?" (antes "+antes+")":"")+".");
 });
 
@@ -1274,7 +1422,7 @@ document.addEventListener("click", function(e){
     var ix=+mv.dataset.mover, inp=document.querySelector('input[data-mover-in="'+ix+'"]'), pe=S.censo[ix];
     var num=parseInt(inp&&inp.value,10);
     if(!pe || !num){ toast("Escribe el número de la habitación a la que pasa."); return; }
-    var antes=pe.hab; pe.hab=String(num); guardar();
+    var antes=cambiarHab(pe, num);
     var ficha=PLANO_SEL; pintarCenso(); if(ficha) fichaHab(ficha);
     toast(nombreCompleto(pe)+" pasa a la habitación "+num+(antes?" (antes "+antes+")":"")+".");
     return;
