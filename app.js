@@ -47,14 +47,14 @@ function genero(nombre){
 var CLAVE="nebrija-secretaria-v1";
 var CENSO=[];
 function listaVacia(){ return { categorias:[], sesiones:[], actual:null, borradas:[], catBorradas:[], ultSync:0 }; }
-var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[], historial:[], tareas:[],
+var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[], historial:[], tareas:[], solicitudes:[],
         lista:listaVacia(), ajustes:{ campos:{}, sheets:{ url:"", token:"", auto:true } } };
 
 var guardarTimer=null;
 function guardar(){
   try{ localStorage.setItem(CLAVE, JSON.stringify({censo:S.censo, origen:S.origen, puntos:S.puntos, puntosLista:S.puntosLista,
     generoManual:S.generoManual, anuario:S.anuario, enviados:S.enviados, salidos:SORTEO.salidos, clupik:S.clupik,
-    historial:S.historial, tareas:S.tareas, lista:S.lista, ajustes:S.ajustes})); }catch(e){}
+    historial:S.historial, tareas:S.tareas, solicitudes:S.solicitudes, lista:S.lista, ajustes:S.ajustes})); }catch(e){}
 }
 function cargar(){
   try{
@@ -66,6 +66,7 @@ function cargar(){
     S.generoManual=d.generoManual||{}; S.anuario=d.anuario||{}; S.enviados=d.enviados||{}; SORTEO.salidos=d.salidos||[];
     S.historial=Array.isArray(d.historial) ? d.historial : [];
     S.tareas=Array.isArray(d.tareas) ? d.tareas : [];
+    S.solicitudes=Array.isArray(d.solicitudes) ? d.solicitudes : [];
     S.clupik=(d.clupik||[]).map(function(p){
       if(p.modalidad===undefined) p.modalidad="baloncesto";
       if(p.genero===undefined) p.genero=p.equipo||"M";
@@ -232,7 +233,10 @@ function pintarResumen(){
     tarjeta("Habitaciones ocupadas", ocupHab+" / "+totalHab, "colegio y anexos", ""),
     tarjeta("Anuario listo", anuListos+" / "+n, n-anuListos ? "faltan "+(n-anuListos) : "completo", anuListos===n?"ok":""),
     tarjeta("Altas Clupik", S.clupik.length, S.clupik.length ? (conf+" confirmadas") : "ninguna preparada todavía", "")
-  ].join("");
+  ].join("")+(function(){
+    var en=S.solicitudes.filter(function(x){ return !x.borrada && ["recibida","entrevista","admitida","espera"].indexOf(x.estado)>=0; }).length;
+    return S.solicitudes.length ? tarjeta("Solicitudes", en, "en curso", "") : "";
+  })();
   pintarTareasInicio();
 }
 function tarjeta(k,v,n,cls){
@@ -408,6 +412,145 @@ document.addEventListener("click", function(e){
   var fi=e.target.closest("button[data-tarea-ficha]");
   if(fi){ var tt=tareaPorId(fi.dataset.tareaFicha), p=tt && personaDeTarea(tt); if(p) abrirFicha(p); return; }
   if(e.target.closest("button[data-tareas-hechas]")){ TAREAS_VER_HECHAS=!TAREAS_VER_HECHAS; pintarTareasInicio(); }
+});
+
+/* ---------- solicitudes de plaza ---------- */
+var ESTADOS_SOL=[["recibida","Recibida"],["entrevista","Entrevista"],["admitida","Admitida"],["espera","En espera"],["confirmada","Confirmada"],["descartada","Descartada"]];
+var SOL={ editando:null, verDesc:false };
+function etiquetaSol(e){ var x=ESTADOS_SOL.filter(function(y){ return y[0]===e; })[0]; return x?x[1]:e; }
+function cursoSiguiente(){
+  var d=new Date(), y=d.getFullYear()+(d.getMonth()>=6?1:0);
+  return y+"/"+String(y+1).slice(2);
+}
+function solPorId(id){ return S.solicitudes.filter(function(x){ return x.id===id; })[0]; }
+function nombreSol(x){ return [titulo(x.nom), titulo(x.a1), titulo(x.a2)].filter(Boolean).join(" "); }
+function enCenso(x){
+  var dni=norm(x.dni||"").replace(/\s/g,""), k=claveP(x);
+  return S.censo.filter(function(p){ return (dni && norm(p.dni||"").replace(/\s/g,"")===dni) || claveP(p)===k; })[0] || null;
+}
+function tocarSol(x){ x.mod=Date.now(); guardar(); programarSync(); pintarSolicitudes(); pintarResumen(); }
+function cambiarEstadoSol(x, estado){
+  if(!x || x.estado===estado || !ESTADOS_SOL.some(function(e){ return e[0]===estado; })) return;
+  x.estado=estado;
+  if(estado==="confirmada") altaDesdeSolicitud(x);
+  tocarSol(x);
+}
+function altaDesdeSolicitud(x){
+  var ya=enCenso(x);
+  if(ya){ toast(nombreSol(x)+" ya estaba en el censo."); return; }
+  var p={ a1:x.a1||"", a2:x.a2||"", nom:x.nom||"", tel:x.tel||"", hab:"", dni:(x.dni||"").trim(), email:x.email||"", estudios:x.estudios||"", puntos:"" };
+  S.censo.push(p);
+  S.censo.sort(function(a,b){ return norm(a.a1+" "+a.a2+" "+a.nom).localeCompare(norm(b.a1+" "+b.a2+" "+b.nom),"es"); });
+  guardar();
+  registrar(p, "datos", "Alta en el censo desde Solicitudes de plaza (curso "+(x.curso||"—")+")");
+  pintarCenso();
+  toast(nombreSol(x)+" entra en el censo, sin habitación. Para que llegue a la hoja, súbelo desde Lista → Categorías y hoja.");
+}
+function htmlTarjetaSol(x){
+  var p=enCenso(x), hoy=hoyISO();
+  var ent = x.entrevista ? '<span class="pill '+(x.estado==="entrevista" && x.entrevista<hoy ? "av" : "neutro")+'">entrevista '+esc(fechaLarga(x.entrevista))+'</span>' : '';
+  return '<div class="tarjeta-sol" draggable="true" data-sol="'+esc(x.id)+'">'+
+    '<button type="button" class="enlace nombre" data-sol-editar="'+esc(x.id)+'">'+esc(nombreSol(x)||"(sin nombre)")+'</button>'+
+    '<div class="sub">'+esc([x.estudios, x.curso ? "curso "+x.curso : ""].filter(Boolean).join(" · ") || "—")+'</div>'+
+    '<div class="pie">'+ent+
+      (x.estado==="confirmada" ? (p ? '<button type="button" class="enlace" data-sol-ficha="'+esc(x.id)+'">en el censo</button>' : '<span class="pill av">no está en el censo</span>') : '')+
+      (sucia(x) ? '<span class="nota-in">sin enviar</span>' : '')+
+      '<select data-sol-estado="'+esc(x.id)+'" aria-label="Estado de la solicitud">'+ESTADOS_SOL.map(function(e){
+        return '<option value="'+e[0]+'"'+(x.estado===e[0]?" selected":"")+'>'+e[1]+'</option>'; }).join("")+'</select>'+
+    '</div></div>';
+}
+function pintarSolicitudes(){
+  var tab=document.getElementById("sol-tablero");
+  if(!tab) return;
+  var q=norm(document.getElementById("sol-busca").value||"");
+  var vivas=S.solicitudes.filter(function(x){ return !x.borrada; });
+  var vis=vivas.filter(function(x){ return !q || norm([x.nom,x.a1,x.a2,x.dni,x.estudios,x.email].join(" ")).indexOf(q)>=0; });
+  var ord=function(a,b){ return String(a.recibida||"").localeCompare(String(b.recibida||"")) || norm(nombreSol(a)).localeCompare(norm(nombreSol(b)),"es"); };
+  tab.innerHTML=ESTADOS_SOL.slice(0,5).map(function(e){
+    var d=vis.filter(function(x){ return x.estado===e[0]; }).sort(ord);
+    return '<div class="columna" data-col="'+e[0]+'"><h3>'+e[1]+'<span class="pill neutro">'+d.length+'</span></h3>'+
+      d.map(htmlTarjetaSol).join("")+'</div>';
+  }).join("");
+  var desc=vis.filter(function(x){ return x.estado==="descartada"; }).sort(ord);
+  var bd=document.getElementById("sol-ver-desc");
+  bd.hidden=!desc.length;
+  bd.textContent=(SOL.verDesc?"Ocultar":"Ver")+" descartadas ("+desc.length+")";
+  document.getElementById("sol-descartadas").innerHTML = SOL.verDesc && desc.length ?
+    '<div class="columna" data-col="descartada" style="margin-top:8px"><h3>Descartadas<span class="pill neutro">'+desc.length+'</span></h3>'+
+    desc.map(htmlTarjetaSol).join("")+'<p class="nota">Las solicitudes descartadas se pueden quitar desde su ficha: sus datos se borran también de la hoja.</p></div>' : "";
+  var pend=vivas.filter(function(x){ return ["recibida","entrevista","admitida","espera"].indexOf(x.estado)>=0; }).length;
+  document.getElementById("sol-estado").innerHTML='<span class="chip"><b>'+pend+'</b>&nbsp;en curso</span>'+
+    '<span class="chip"><b>'+vivas.filter(function(x){ return x.estado==="confirmada"; }).length+'</b>&nbsp;confirmadas</span>';
+}
+function abrirFormSol(x){
+  var f=document.getElementById("sol-form");
+  SOL.editando = x ? x.id : null;
+  document.getElementById("sol-form-t").textContent = x ? "Editar solicitud" : "Nueva solicitud";
+  ["nom","a1","a2","dni","tel","email","estudios","curso","recibida","entrevista"].forEach(function(c){
+    f.elements[c].value = x ? (x[c]||"") : (c==="curso" ? cursoSiguiente() : c==="recibida" ? hoyISO() : "");
+  });
+  var bq=document.getElementById("sol-quitar");
+  bq.hidden=!x; bq.dataset.seguro=""; bq.textContent="Quitar solicitud";
+  f.hidden=false;
+  f.scrollIntoView({block:"nearest"});
+  f.elements.nom.focus();
+}
+function cerrarFormSol(){ SOL.editando=null; document.getElementById("sol-form").hidden=true; }
+document.getElementById("sol-nueva").addEventListener("click", function(){ abrirFormSol(null); });
+document.getElementById("sol-cancelar").addEventListener("click", cerrarFormSol);
+document.getElementById("sol-busca").addEventListener("input", pintarSolicitudes);
+document.getElementById("sol-ver-desc").addEventListener("click", function(){ SOL.verDesc=!SOL.verDesc; pintarSolicitudes(); });
+document.getElementById("sol-form").addEventListener("submit", function(e){
+  e.preventDefault();
+  var f=this, v={};
+  ["nom","a1","a2","dni","tel","email","estudios","curso","recibida","entrevista"].forEach(function(c){ v[c]=f.elements[c].value.replace(/\s+/g," ").trim(); });
+  if(!v.nom){ toast("Escribe al menos el nombre."); f.elements.nom.focus(); return; }
+  if(v.dni && docInfo(v.dni).estado==="letra"){ toast("La letra del DNI no cuadra. Revísalo.", "mal"); f.elements.dni.focus(); return; }
+  var x = SOL.editando ? solPorId(SOL.editando) : null, nueva=!x;
+  if(x) Object.assign(x, v);
+  else { x=Object.assign({ id:uid(), estado:"recibida", disp:"", borrada:false, sync:0 }, v); S.solicitudes.push(x); }
+  cerrarFormSol();
+  tocarSol(x);
+  toast(nueva ? "Solicitud guardada." : "Solicitud actualizada.");
+});
+document.getElementById("sol-quitar").addEventListener("click", function(){
+  var b=this, x=SOL.editando && solPorId(SOL.editando);
+  if(!x) return;
+  if(b.dataset.seguro!=="1"){ b.dataset.seguro="1"; b.textContent="¿Quitar? Se borran sus datos"; b.classList.add("aviso-btn"); return; }
+  ["a1","a2","nom","dni","tel","email","estudios","curso","recibida","entrevista"].forEach(function(c){ x[c]=""; });
+  x.borrada=true;
+  cerrarFormSol(); tocarSol(x);
+  toast("Solicitud quitada. Sus datos se borran también de la hoja al sincronizar.");
+});
+var tablerosSol=[document.getElementById("sol-tablero"), document.getElementById("sol-descartadas")];
+tablerosSol.forEach(function(t){
+  t.addEventListener("change", function(e){
+    var s=e.target.closest("select[data-sol-estado]"); if(!s) return;
+    cambiarEstadoSol(solPorId(s.dataset.solEstado), s.value);
+  });
+  t.addEventListener("click", function(e){
+    var ed=e.target.closest("button[data-sol-editar]");
+    if(ed){ abrirFormSol(solPorId(ed.dataset.solEditar)); return; }
+    var fi=e.target.closest("button[data-sol-ficha]");
+    if(fi){ var p=enCenso(solPorId(fi.dataset.solFicha)); if(p) abrirFicha(p); }
+  });
+  // arrastrar tarjetas entre columnas (ordenador)
+  t.addEventListener("dragstart", function(e){
+    var c=e.target.closest(".tarjeta-sol[data-sol]"); if(!c) return;
+    e.dataTransfer.setData("text/plain", c.dataset.sol); e.dataTransfer.effectAllowed="move";
+  });
+  t.addEventListener("dragover", function(e){
+    var col=e.target.closest(".columna[data-col]"); if(!col) return;
+    e.preventDefault(); col.classList.add("sobre");
+  });
+  t.addEventListener("dragleave", function(e){
+    var col=e.target.closest(".columna[data-col]"); if(col && !col.contains(e.relatedTarget)) col.classList.remove("sobre");
+  });
+  t.addEventListener("drop", function(e){
+    var col=e.target.closest(".columna[data-col]"); if(!col) return;
+    e.preventDefault(); col.classList.remove("sobre");
+    cambiarEstadoSol(solPorId(e.dataTransfer.getData("text/plain")), col.dataset.col);
+  });
 });
 
 function anularHist(id){
@@ -1362,6 +1505,7 @@ function vista(id){
   window.scrollTo(0,0);
   try{ history.replaceState(null,"","#"+id); }catch(e){}
   if(id==="lista") pintarLista();
+  if(id==="solicitudes") pintarSolicitudes();
   if(id==="drive" && typeof entrarDrive==="function") entrarDrive();
   if(id==="auto" && typeof entrarAuto==="function") entrarAuto();
   if(id==="actualizar" && typeof pintarPares==="function") pintarPares();
@@ -1397,7 +1541,7 @@ document.getElementById("btn-borrar").addEventListener("click", function(){
   if(!confirm("Se borrarán de este dispositivo el censo, la asistencia, los clubes y los ajustes (también la conexión con la hoja). Lo que tengas guardado en tu hoja de Google no se toca. ¿Continuar?")) return;
   try{ localStorage.removeItem(CLAVE); }catch(e){}
   S.censo=[]; S.origen="vacio"; S.puntos=[]; S.puntosLista=false; S.generoManual={}; S.sel={}; S.anuario={}; S.enviados={};
-  S.clupik=[]; S.historial=[]; S.tareas=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
+  S.clupik=[]; S.historial=[]; S.tareas=[]; S.solicitudes=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
   S.ajustes={ campos:{}, sheets:{ url:"", token:"", auto:true } };
   restaurarCampos(); pintarCenso(); pintarClupik(); actualizarCartel();
   toast("Datos borrados de este dispositivo.");
@@ -1878,7 +2022,8 @@ function tocarCat(c){ c.mod=Date.now(); guardar(); programarSync(); }
 function sucia(x){ return (x.mod||0) > (x.sync||0); }
 function pendientesSync(){
   return S.lista.sesiones.filter(sucia).length + S.lista.categorias.filter(sucia).length +
-         S.lista.borradas.length + S.lista.catBorradas.length + S.historial.filter(sucia).length + S.tareas.filter(sucia).length;
+         S.lista.borradas.length + S.lista.catBorradas.length + S.historial.filter(sucia).length + S.tareas.filter(sucia).length +
+         S.solicitudes.filter(sucia).length;
 }
 
 /* ---------- conexión con la hoja ---------- */
@@ -2021,6 +2166,39 @@ function enviarTareas(){
     return true;
   });
 }
+var CAMPOS_SOL=["a1","a2","nom","dni","tel","email","estudios","curso","recibida","entrevista","estado","disp","borrada"];
+function fusionarSolicitudes(r){
+  if(!Array.isArray(r.solicitudes)) return;
+  var porId={}; S.solicitudes.forEach(function(x){ porId[x.id]=x; });
+  var remotas={};
+  r.solicitudes.forEach(function(rs){
+    remotas[rs.id]=true;
+    var loc=porId[rs.id], mod=Number(rs.mod)||0, datos={};
+    CAMPOS_SOL.forEach(function(c){ datos[c]= c==="borrada" ? !!rs.borrada : (rs[c]||""); });
+    if(!loc){ if(!datos.borrada) S.solicitudes.push(Object.assign({ id:rs.id, mod:mod, sync:mod }, datos)); return; }
+    if(!loc.disp && rs.disp) loc.disp=rs.disp;
+    if(!sucia(loc) && mod>=(loc.mod||0)){ Object.assign(loc, datos); loc.mod=mod; loc.sync=mod; }
+  });
+  S.solicitudes.forEach(function(x){ if(!sucia(x) && !remotas[x.id]) x.sync=0; });
+  // las quitadas que ya están en la hoja como borradas no hace falta guardarlas aquí
+  S.solicitudes=S.solicitudes.filter(function(x){ return !(x.borrada && !sucia(x)); });
+}
+function enviarSolicitudes(){
+  if(SYNC.scriptViejo) return Promise.resolve(false);
+  var sucias=S.solicitudes.filter(sucia);
+  if(!sucias.length) return Promise.resolve(false);
+  var marca=sucias.map(function(x){ return [x, x.mod]; });
+  return hojaLlamar("solicitudes_guardar", { solicitudes: sucias.map(function(x){
+    var o={ id:x.id, mod:x.mod };
+    CAMPOS_SOL.forEach(function(c){ if(c!=="disp") o[c]=x[c]; });
+    return o;
+  }) }).then(function(r){
+    marca.forEach(function(par){ par[0].sync=par[1]; if(!par[0].disp && r && r.dispositivo) par[0].disp=r.dispositivo; });
+    S.solicitudes=S.solicitudes.filter(function(x){ return !(x.borrada && !sucia(x)); });
+    guardar();
+    return true;
+  });
+}
 function enviarHistorial(){
   if(SYNC.scriptViejo) return Promise.resolve(false);
   var sucias=S.historial.filter(sucia);
@@ -2071,8 +2249,8 @@ function sincronizar(silencioso){
     return Promise.resolve(false);
   }
   SYNC.trabajando=true; SYNC.error=""; pintarSync();
-  return hojaLlamar("todo").then(function(r){ fusionar(r); fusionarHistorial(r); fusionarTareas(r); guardar(); return enviarPendiente(); })
-    .then(enviarHistorial).then(enviarTareas)
+  return hojaLlamar("todo").then(function(r){ fusionar(r); fusionarHistorial(r); fusionarTareas(r); fusionarSolicitudes(r); guardar(); return enviarPendiente(); })
+    .then(enviarHistorial).then(enviarTareas).then(enviarSolicitudes)
     .then(function(){
       SYNC.ultimo=Date.now(); S.lista.ultSync=SYNC.ultimo; guardar();
       if(!silencioso) toast("Sincronizado con la hoja de Google.");
@@ -2085,7 +2263,7 @@ function sincronizar(silencioso){
     })
     .then(function(ok){
       SYNC.trabajando=false;
-      pintarLista(); pintarFicha(); pintarTareasInicio();
+      pintarLista(); pintarFicha(); pintarTareasInicio(); pintarSolicitudes();
       if(SYNC.repetir){ SYNC.repetir=false; programarSync(); }
       return ok;
     });
@@ -2104,7 +2282,7 @@ function pintarSync(){
     punto.hidden=!conf;
     punto.className="sync-pt "+estado;
     punto.title = SYNC.trabajando ? "Sincronizando…" : SYNC.error ? SYNC.error : n ? n+" cambio"+(n===1?"":"s")+" sin enviar"+
-      (SYNC.scriptViejo && (S.historial.filter(sucia).length || S.tareas.filter(sucia).length) ? ". El historial y las tareas se guardarán en la hoja cuando el script esté en la versión 5." : "") : "Todo sincronizado";
+      (SYNC.scriptViejo && (S.historial.filter(sucia).length || S.tareas.filter(sucia).length || S.solicitudes.filter(sucia).length) ? ". El historial, las tareas y las solicitudes se guardarán en la hoja cuando el script esté en la versión 5." : "") : "Todo sincronizado";
   }
   var e=document.getElementById("lista-estado");
   if(e){

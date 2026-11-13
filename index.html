@@ -48,6 +48,7 @@
     <div class="grupo">
       <div class="et">Censo</div>
       <button class="nav" data-v="censo"><svg viewBox="0 0 20 20"><path d="M3 5h14M3 10h14M3 15h9"/></svg>Listado de colegiales</button>
+      <button class="nav" data-v="solicitudes"><svg viewBox="0 0 20 20"><path d="M3 11l2-7h10l2 7v5H3zM3 11h4l1 2h4l1-2h4"/></svg>Solicitudes de plaza</button>
       <button class="nav" data-v="unificar"><svg viewBox="0 0 20 20"><path d="M4 6h5l2 4H4zM16 14h-5l-2-4h7"/></svg>Unificar listados</button>
       <button class="nav" data-v="validar"><svg viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9"/></svg>Validación de datos</button>
       <button class="nav" data-v="habitaciones"><svg viewBox="0 0 20 20"><path d="M3 17V6l7-3 7 3v11M8 17v-5h4v5"/></svg>Habitaciones</button>
@@ -135,6 +136,44 @@
         <button class="btn" data-ir="clupik">Clupik</button>
         <button class="btn" data-ir="mensajes">WhatsApp</button>
       </div>
+    </section>
+
+    <!-- ================= SOLICITUDES DE PLAZA ================= -->
+    <section class="vista" id="v-solicitudes">
+      <div class="cabecera">
+        <div>
+          <h1>Solicitudes de plaza</h1>
+          <p>De la solicitud a la plaza confirmada. Al confirmar, entra en el censo.</p>
+        </div>
+        <div class="estado" id="sol-estado"></div>
+      </div>
+      <div class="barra">
+        <button class="btn p" id="sol-nueva" type="button">Nueva solicitud</button>
+        <input class="busca" id="sol-busca" placeholder="Buscar…" aria-label="Buscar solicitudes">
+      </div>
+      <form class="panel sol-form" id="sol-form" hidden>
+        <h3 id="sol-form-t">Nueva solicitud</h3>
+        <div class="sol-campos">
+          <div class="campo"><label for="sol-nom">Nombre</label><input id="sol-nom" name="nom" maxlength="60" required></div>
+          <div class="campo"><label for="sol-a1">Primer apellido</label><input id="sol-a1" name="a1" maxlength="60"></div>
+          <div class="campo"><label for="sol-a2">Segundo apellido</label><input id="sol-a2" name="a2" maxlength="60"></div>
+          <div class="campo"><label for="sol-dni">DNI o NIE</label><input id="sol-dni" name="dni" maxlength="20" autocomplete="off"></div>
+          <div class="campo"><label for="sol-tel">Teléfono</label><input id="sol-tel" name="tel" type="tel" maxlength="30"></div>
+          <div class="campo"><label for="sol-email">Correo</label><input id="sol-email" name="email" type="email" maxlength="120"></div>
+          <div class="campo"><label for="sol-estudios">Estudios</label><input id="sol-estudios" name="estudios" maxlength="120"></div>
+          <div class="campo"><label for="sol-curso">Curso</label><input id="sol-curso" name="curso" maxlength="12"></div>
+          <div class="campo"><label for="sol-recibida">Recibida</label><input id="sol-recibida" name="recibida" type="date"></div>
+          <div class="campo"><label for="sol-entrevista">Entrevista</label><input id="sol-entrevista" name="entrevista" type="date"></div>
+        </div>
+        <div class="barra" style="margin:12px 0 0">
+          <button class="btn p" type="submit">Guardar</button>
+          <button class="btn" type="button" id="sol-cancelar">Cancelar</button>
+          <button class="btn" type="button" id="sol-quitar" hidden>Quitar solicitud</button>
+        </div>
+      </form>
+      <div class="tablero" id="sol-tablero"></div>
+      <button type="button" class="enlace" id="sol-ver-desc" hidden></button>
+      <div id="sol-descartadas"></div>
     </section>
 
     <!-- ================= PASAR LISTA ================= -->

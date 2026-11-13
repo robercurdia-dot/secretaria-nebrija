@@ -54,7 +54,8 @@ var HOJAS = {
   totales: "Totales",
   auto: "Automatización",
   historial: "Historial",
-  tareas: "Tareas"
+  tareas: "Tareas",
+  solicitudes: "Solicitudes"
 };
 var CABECERAS = {
   censo: ["Apellido 1", "Apellido 2", "Nombre", "Teléfono", "Habitación", "DNI", "Email", "Estudios"],
@@ -63,7 +64,9 @@ var CABECERAS = {
   asistencia: ["SesiónId", "Fecha", "Categoría", "Título", "Clave", "Apellidos", "Nombre", "Habitación", "Estado", "Puntos"],
   auto: ["Id", "Tarea", "Estado", "Creado", "Actualizado", "Mensaje", "Encargo", "Resultado"],
   historial: ["Id", "Fecha", "Clave", "DNI", "Colegial", "Tipo", "Detalle", "Dispositivo", "Modificado", "Anulada"],
-  tareas: ["Id", "Título", "Vence", "Clave", "DNI", "Colegial", "Estado", "Creada", "Dispositivo", "Modificado", "Borrada"]
+  tareas: ["Id", "Título", "Vence", "Clave", "DNI", "Colegial", "Estado", "Creada", "Dispositivo", "Modificado", "Borrada"],
+  solicitudes: ["Id", "Apellido 1", "Apellido 2", "Nombre", "DNI", "Teléfono", "Email", "Estudios", "Curso", "Recibida",
+                "Entrevista", "Estado", "Dispositivo", "Modificado", "Borrada"]
 };
 // columnas numéricas (el resto se guarda como texto para que Sheets no convierta fechas ni números)
 var NUMERICAS = {
@@ -72,7 +75,8 @@ var NUMERICAS = {
   asistencia: [10],
   auto: [4, 5],
   historial: [9],
-  tareas: [10]
+  tareas: [10],
+  solicitudes: [14]
 };
 var ESTADO_TEXTO = { P: "Presente", A: "Ausente", J: "Justificado" };
 var ESTADO_CODIGO = { "Presente": "P", "Ausente": "A", "Justificado": "J" };
@@ -119,6 +123,8 @@ function doPost(e) {
         return todo();
       case "lista_guardar":
         return listaGuardar(pet);
+      case "solicitudes_guardar":
+        return solicitudesGuardar(pet, quienEs(props, String(pet.token), clave));
       case "tareas_guardar":
         return tareasGuardar(pet, quienEs(props, String(pet.token), clave));
       case "historial_guardar":
@@ -347,7 +353,48 @@ function todo() {
     return { sid: r[0], clave: r[4], estado: ESTADO_CODIGO[r[8]] || "" };
   }).filter(function (a) { return a.estado; });
   return salida({ ok: true, version: VERSION_SCRIPT, categorias: categorias, sesiones: sesiones, asistencia: asistencia,
-                  historial: historialLeer(), tareas: tareasLeer() });
+                  historial: historialLeer(), tareas: tareasLeer(),
+                  solicitudes: solicitudesLeer() });
+}
+
+/* ---------------- solicitudes de plaza ---------------- */
+// Una fila por solicitud. Gana el cambio más reciente. Al quitar una solicitud se borran sus datos
+// personales de la hoja y solo queda el Id marcado como borrado (para que los demás dispositivos la quiten).
+
+var SOL_ESTADOS = ["recibida", "entrevista", "admitida", "espera", "confirmada", "descartada"];
+
+function solicitudesLeer() {
+  return leerTabla("solicitudes").map(function (r) {
+    return { id: r[0], a1: r[1], a2: r[2], nom: r[3], dni: r[4], tel: r[5], email: r[6], estudios: r[7], curso: r[8],
+             recibida: r[9], entrevista: r[10], estado: r[11] || "recibida", disp: r[12], mod: Number(r[13]) || 0, borrada: !!r[14] };
+  });
+}
+
+function solicitudesGuardar(pet, dispositivo) {
+  var filas = leerTabla("solicitudes");
+  var porId = {};
+  filas.forEach(function (r, i) { porId[r[0]] = i; });
+  var fecha = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : ""; };
+  var txt = function (v, n) { return String(v || "").trim().slice(0, n); };
+  var n = 0;
+  (pet.solicitudes || []).forEach(function (x) {
+    var id = txt(x.id, 40);
+    if (!id) return;
+    var mod = Number(x.mod) || 0;
+    var i = porId[id];
+    if (i !== undefined && (Number(filas[i][13]) || 0) > mod) return; // en la hoja hay un cambio más reciente
+    var disp = i !== undefined ? filas[i][12] : dispositivo;
+    var fila = x.borrada
+      ? [id, "", "", "", "", "", "", "", "", "", "", "", disp, mod, 1]
+      : [id, txt(x.a1, 60), txt(x.a2, 60), txt(x.nom, 60), txt(x.dni, 20), txt(x.tel, 30), txt(x.email, 120),
+         txt(x.estudios, 120), txt(x.curso, 12), fecha(x.recibida), fecha(x.entrevista),
+         SOL_ESTADOS.indexOf(x.estado) >= 0 ? x.estado : "recibida", disp, mod, ""];
+    if (!x.borrada && !fila[3]) return; // sin nombre no se guarda
+    if (i !== undefined) filas[i] = fila; else { porId[id] = filas.length; filas.push(fila); }
+    n++;
+  });
+  if (n) escribirTabla("solicitudes", filas);
+  return salida({ ok: true, guardadas: n, dispositivo: dispositivo });
 }
 
 /* ---------------- tareas ---------------- */

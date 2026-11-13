@@ -359,6 +359,28 @@ button.enlace{background:none; border:0; padding:0; color:var(--carmin); font:in
     padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 }
 
+/* ---------- solicitudes de plaza ---------- */
+.sol-form{margin-bottom:16px}
+.sol-campos{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px}
+.sol-campos .campo input{width:100%}
+.tablero{display:grid; grid-template-columns:repeat(5,minmax(200px,1fr)); gap:12px; overflow-x:auto; padding-bottom:6px; align-items:start}
+.columna{background:var(--surface-2); border:1px solid var(--linea); border-radius:var(--r); padding:10px; min-height:120px}
+.columna.sobre{border-color:var(--carmin); background:var(--carmin-suave)}
+.columna h3{font-size:13px; letter-spacing:.04em; display:flex; justify-content:space-between; align-items:center; margin:0 0 8px}
+.tarjeta-sol{background:var(--surface); border:1px solid var(--linea); border-radius:10px; padding:10px; margin-bottom:8px; box-shadow:var(--sombra); cursor:grab}
+.tarjeta-sol:active{cursor:grabbing}
+.tarjeta-sol .nombre{display:block; text-align:left; font-weight:600; font-size:14px; color:var(--ink); text-decoration:none}
+.tarjeta-sol .sub{font-size:12px; color:var(--ink-soft); margin-top:2px; overflow-wrap:anywhere}
+.tarjeta-sol .pie{display:flex; gap:6px; align-items:center; justify-content:space-between; margin-top:8px; flex-wrap:wrap}
+.tarjeta-sol select{font:inherit; font-size:12px; padding:3px 6px; border-radius:7px; border:1px solid var(--linea-fuerte); background:var(--surface); color:var(--ink)}
+#sol-ver-desc{margin-top:12px}
+@media (max-width:860px){
+  .tablero{grid-template-columns:1fr; overflow-x:visible}
+  .columna{min-height:0}
+  .columna h3{margin-bottom:0}
+  .columna .tarjeta-sol:first-of-type{margin-top:8px}
+}
+
 /* ---------- avisos flotantes ---------- */
 #toast-wrap{position:fixed; right:18px; bottom:18px; z-index:999; display:flex; flex-direction:column; gap:8px; max-width:340px}
 .toast{background:var(--surface); border:1px solid var(--linea); border-radius:var(--r); box-shadow:var(--sombra); padding:11px 14px; font-size:13px; color:var(--ink); animation:toast-in .18s ease-out}
