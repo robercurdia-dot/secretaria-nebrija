@@ -47,14 +47,14 @@ function genero(nombre){
 var CLAVE="nebrija-secretaria-v1";
 var CENSO=[];
 function listaVacia(){ return { categorias:[], sesiones:[], actual:null, borradas:[], catBorradas:[], ultSync:0 }; }
-var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[], historial:[],
+var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[], historial:[], tareas:[],
         lista:listaVacia(), ajustes:{ campos:{}, sheets:{ url:"", token:"", auto:true } } };
 
 var guardarTimer=null;
 function guardar(){
   try{ localStorage.setItem(CLAVE, JSON.stringify({censo:S.censo, origen:S.origen, puntos:S.puntos, puntosLista:S.puntosLista,
     generoManual:S.generoManual, anuario:S.anuario, enviados:S.enviados, salidos:SORTEO.salidos, clupik:S.clupik,
-    historial:S.historial, lista:S.lista, ajustes:S.ajustes})); }catch(e){}
+    historial:S.historial, tareas:S.tareas, lista:S.lista, ajustes:S.ajustes})); }catch(e){}
 }
 function cargar(){
   try{
@@ -65,6 +65,7 @@ function cargar(){
     S.censo=d.censo||[]; S.origen=d.origen||(S.censo.length?"fichero":"vacio"); S.puntos=d.puntos||[]; S.puntosLista=!!d.puntosLista;
     S.generoManual=d.generoManual||{}; S.anuario=d.anuario||{}; S.enviados=d.enviados||{}; SORTEO.salidos=d.salidos||[];
     S.historial=Array.isArray(d.historial) ? d.historial : [];
+    S.tareas=Array.isArray(d.tareas) ? d.tareas : [];
     S.clupik=(d.clupik||[]).map(function(p){
       if(p.modalidad===undefined) p.modalidad="baloncesto";
       if(p.genero===undefined) p.genero=p.equipo||"M";
@@ -232,6 +233,7 @@ function pintarResumen(){
     tarjeta("Anuario listo", anuListos+" / "+n, n-anuListos ? "faltan "+(n-anuListos) : "completo", anuListos===n?"ok":""),
     tarjeta("Altas Clupik", S.clupik.length, S.clupik.length ? (conf+" confirmadas") : "ninguna preparada todavía", "")
   ].join("");
+  pintarTareasInicio();
 }
 function tarjeta(k,v,n,cls){
   return '<div class="tarjeta '+(cls||"")+'"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div><div class="n">'+esc(n)+'</div></div>';
@@ -296,6 +298,118 @@ function historialDe(p){
     return e.clave===k || (dni && norm(e.dni||"").replace(/\s/g,"")===dni);
   }).sort(function(a,b){ return String(b.fecha).localeCompare(String(a.fecha)) || (b.mod-a.mod); });
 }
+/* ---------- tareas: recordatorios cortos, con o sin colegial ---------- */
+var TAREAS_VER_HECHAS=false;
+function nuevaTarea(titulo, vence, p){
+  titulo=String(titulo||"").replace(/\s+/g," ").trim().slice(0,120);
+  if(!titulo) return null;
+  var t={ id:uid(), titulo:titulo, vence:/^\d{4}-\d{2}-\d{2}$/.test(vence||"") ? vence : "",
+          clave:p?claveP(p):"", dni:p?(p.dni||"").trim():"", nombre:p?nombreCompleto(p):"",
+          estado:"pendiente", creada:ahoraTexto(), disp:"", borrada:false, mod:Date.now(), sync:0 };
+  S.tareas.push(t);
+  tocarTarea(t);
+  return t;
+}
+function tocarTarea(t){ t.mod=Date.now(); guardar(); programarSync(); pintarTareasInicio(); pintarFicha(); }
+function tareaPorId(id){ return S.tareas.filter(function(t){ return t.id===id; })[0]; }
+function personaDeTarea(t){
+  if(!t.clave && !t.dni) return null;
+  var dni=norm(t.dni||"").replace(/\s/g,"");
+  return S.censo.filter(function(p){ return claveP(p)===t.clave || (dni && norm(p.dni||"").replace(/\s/g,"")===dni); })[0] || null;
+}
+function tareasDe(p){
+  var k=claveP(p), dni=norm(p.dni||"").replace(/\s/g,"");
+  return S.tareas.filter(function(t){ return !t.borrada && (t.clave===k || (dni && norm(t.dni||"").replace(/\s/g,"")===dni)); });
+}
+function ordenTareas(a,b){
+  if(a.estado!==b.estado) return a.estado==="hecha" ? 1 : -1;
+  var va=a.vence||"9999", vb=b.vence||"9999";
+  return va.localeCompare(vb) || String(a.creada).localeCompare(String(b.creada));
+}
+function htmlTarea(t, conNombre){
+  var hoy=hoyISO(), venc="";
+  if(t.vence && t.estado!=="hecha"){
+    var cls = t.vence<hoy ? "mal" : t.vence===hoy ? "av" : "neutro";
+    venc='<span class="pill '+cls+'">'+(t.vence<hoy?"venció ":t.vence===hoy?"hoy · ":"")+esc(fechaLarga(t.vence))+'</span>';
+  } else if(t.vence) venc='<span class="pill neutro">'+esc(fechaLarga(t.vence))+'</span>';
+  var p=conNombre ? personaDeTarea(t) : null;
+  return '<div class="tarea'+(t.estado==="hecha"?' hecha':'')+'">'+
+    '<label><input type="checkbox" data-tarea-hecha="'+esc(t.id)+'"'+(t.estado==="hecha"?' checked':'')+'>'+
+    '<span><b>'+esc(t.titulo)+'</b>'+
+    (conNombre && t.nombre ? (p ? ' <button type="button" class="enlace" data-tarea-ficha="'+esc(t.id)+'">'+esc(t.nombre)+'</button>'
+                                : ' <span class="nota-in">'+esc(t.nombre)+'</span>') : '')+
+    '</span></label>'+
+    '<span class="tarea-der">'+venc+(sucia(t)?'<span class="nota-in">sin enviar</span>':'')+
+    '<button type="button" class="mini" data-tarea-borrar="'+esc(t.id)+'">Quitar</button></span></div>';
+}
+function formTarea(dondeId){
+  return '<form class="tarea-nueva" data-tarea-form="'+dondeId+'">'+
+    '<input class="busca" name="titulo" maxlength="120" placeholder="Nueva tarea…" aria-label="Nueva tarea" autocomplete="off">'+
+    '<input class="busca" name="vence" type="date" aria-label="Fecha límite">'+
+    '<button class="btn" type="submit">Añadir</button></form>';
+}
+/* repintar sin perder lo que se está escribiendo (la sincronización repinta en cualquier momento) */
+function pintarConservando(caja, html){
+  var vals={}, foco=null, sel=null, a=document.activeElement;
+  caja.querySelectorAll("input[name],input[id]").forEach(function(i){
+    var k=i.id||("n:"+i.closest("form[data-tarea-form]").dataset.tareaForm+":"+i.name);
+    if(i.type!=="checkbox") vals[k]=i.value;
+    if(i===a){ foco=k; try{ sel=[i.selectionStart,i.selectionEnd]; }catch(e){} }
+  });
+  caja.innerHTML=html;
+  caja.querySelectorAll("input[name],input[id]").forEach(function(i){
+    var k=i.id||("n:"+i.closest("form[data-tarea-form]").dataset.tareaForm+":"+i.name);
+    if(vals[k]!==undefined && i.type!=="checkbox") i.value=vals[k];
+    if(k===foco){ i.focus(); if(sel) try{ i.setSelectionRange(sel[0],sel[1]); }catch(e){} }
+  });
+}
+function pintarTareasInicio(){
+  var caja=document.getElementById("inicio-tareas");
+  if(!caja) return;
+  var vivas=S.tareas.filter(function(t){ return !t.borrada; });
+  var pend=vivas.filter(function(t){ return t.estado!=="hecha"; }).sort(ordenTareas);
+  var hechas=vivas.filter(function(t){ return t.estado==="hecha"; }).sort(function(a,b){ return b.mod-a.mod; });
+  var hoy=hoyISO(), venc=pend.filter(function(t){ return t.vence && t.vence<hoy; }).length;
+  var h='<div class="tareas-cab"><h3>Tareas</h3>'+
+    (venc ? '<span class="pill mal">'+venc+' vencida'+(venc===1?'':'s')+'</span>' : pend.length ? '<span class="pill neutro">'+pend.length+' pendiente'+(pend.length===1?'':'s')+'</span>' : '')+
+    '</div>'+formTarea("inicio")+
+    (pend.length ? '<div class="tareas">'+pend.map(function(t){ return htmlTarea(t,true); }).join("")+'</div>' : '<p class="nota">No hay tareas pendientes.</p>');
+  if(hechas.length){
+    h+='<button type="button" class="enlace tareas-hechas" data-tareas-hechas>'+(TAREAS_VER_HECHAS?'Ocultar':'Ver')+' hechas ('+hechas.length+')</button>';
+    if(TAREAS_VER_HECHAS) h+='<div class="tareas">'+hechas.slice(0,30).map(function(t){ return htmlTarea(t,true); }).join("")+'</div>';
+  }
+  pintarConservando(caja, h);
+}
+document.addEventListener("submit", function(e){
+  var f=e.target.closest("form[data-tarea-form]"); if(!f) return;
+  e.preventDefault();
+  var titulo=f.elements.titulo.value, vence=f.elements.vence.value;
+  if(!titulo.trim()){ toast("Escribe qué hay que hacer."); f.elements.titulo.focus(); return; }
+  var p = f.dataset.tareaForm==="ficha" ? FICHA.p : null;
+  f.elements.titulo.value=""; f.elements.vence.value="";
+  nuevaTarea(titulo, vence, p);
+  var otra=document.querySelector('form[data-tarea-form="'+f.dataset.tareaForm+'"] input[name=titulo]'); if(otra) otra.focus();
+});
+document.addEventListener("change", function(e){
+  var c=e.target.closest("input[data-tarea-hecha]"); if(!c) return;
+  var t=tareaPorId(c.dataset.tareaHecha); if(!t) return;
+  t.estado=c.checked ? "hecha" : "pendiente";
+  tocarTarea(t);
+});
+document.addEventListener("click", function(e){
+  var q=e.target.closest("button[data-tarea-borrar]");
+  if(q){
+    if(q.dataset.seguro!=="1"){ q.dataset.seguro="1"; q.textContent="¿Quitar?"; q.classList.add("aviso-btn");
+      setTimeout(function(){ if(q.isConnected){ q.dataset.seguro=""; q.textContent="Quitar"; q.classList.remove("aviso-btn"); } }, 4000); return; }
+    var t=tareaPorId(q.dataset.tareaBorrar); if(!t) return;
+    t.borrada=true; tocarTarea(t); toast("Tarea quitada.");
+    return;
+  }
+  var fi=e.target.closest("button[data-tarea-ficha]");
+  if(fi){ var tt=tareaPorId(fi.dataset.tareaFicha), p=tt && personaDeTarea(tt); if(p) abrirFicha(p); return; }
+  if(e.target.closest("button[data-tareas-hechas]")){ TAREAS_VER_HECHAS=!TAREAS_VER_HECHAS; pintarTareasInicio(); }
+});
+
 function anularHist(id){
   var e=S.historial.filter(function(x){ return x.id===id; })[0];
   if(!e || e.anulada) return;
@@ -403,6 +517,10 @@ function pintarFicha(){
       }).join("") : '<p class="nota">No está en la lista de Clupik.</p>')+
      '</section>';
 
+  var tar=tareasDe(p).sort(ordenTareas);
+  h+='<section class="fcol-sec"><h3>Tareas</h3>'+formTarea("ficha")+
+     (tar.length ? '<div class="tareas">'+tar.map(function(t){ return htmlTarea(t,false); }).join("")+'</div>' : '')+
+     '</section>';
   var hist=historialDe(p);
   h+='<section class="fcol-sec"><h3>Historial</h3>'+
      (hist.length ? '<div class="fcol-hist">'+hist.map(function(e){
@@ -412,7 +530,8 @@ function pintarFicha(){
       }).join("")+'</div>' : '<p class="nota">Todavía no hay nada anotado.</p>')+
      '</section>';
   if(S.enviados[claveP(p)]) h+='<p class="nota">Ya se le escribió por WhatsApp en la tanda actual.</p>';
-  caja.innerHTML=h;
+  if(caja.dataset.de!==claveP(p)){ caja.innerHTML=""; caja.dataset.de=claveP(p); }  // otra persona: formulario limpio
+  pintarConservando(caja, h);
 }
 document.getElementById("tabla-censo").addEventListener("click", function(e){
   var tr=e.target.closest("tr[data-ficha]"); if(!tr) return;
@@ -1278,7 +1397,7 @@ document.getElementById("btn-borrar").addEventListener("click", function(){
   if(!confirm("Se borrarán de este dispositivo el censo, la asistencia, los clubes y los ajustes (también la conexión con la hoja). Lo que tengas guardado en tu hoja de Google no se toca. ¿Continuar?")) return;
   try{ localStorage.removeItem(CLAVE); }catch(e){}
   S.censo=[]; S.origen="vacio"; S.puntos=[]; S.puntosLista=false; S.generoManual={}; S.sel={}; S.anuario={}; S.enviados={};
-  S.clupik=[]; S.historial=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
+  S.clupik=[]; S.historial=[]; S.tareas=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
   S.ajustes={ campos:{}, sheets:{ url:"", token:"", auto:true } };
   restaurarCampos(); pintarCenso(); pintarClupik(); actualizarCartel();
   toast("Datos borrados de este dispositivo.");
@@ -1759,7 +1878,7 @@ function tocarCat(c){ c.mod=Date.now(); guardar(); programarSync(); }
 function sucia(x){ return (x.mod||0) > (x.sync||0); }
 function pendientesSync(){
   return S.lista.sesiones.filter(sucia).length + S.lista.categorias.filter(sucia).length +
-         S.lista.borradas.length + S.lista.catBorradas.length + S.historial.filter(sucia).length;
+         S.lista.borradas.length + S.lista.catBorradas.length + S.historial.filter(sucia).length + S.tareas.filter(sucia).length;
 }
 
 /* ---------- conexión con la hoja ---------- */
@@ -1874,6 +1993,34 @@ function fusionarHistorial(r){
   // lo que estaba sincronizado y ya no está en la hoja (hoja vaciada) se vuelve a enviar
   S.historial.forEach(function(e){ if(!sucia(e) && !remotas[e.id]) e.sync=0; });
 }
+function fusionarTareas(r){
+  if(!Array.isArray(r.tareas)) return;
+  var porId={}; S.tareas.forEach(function(t){ porId[t.id]=t; });
+  var remotas={};
+  r.tareas.forEach(function(rt){
+    remotas[rt.id]=true;
+    var loc=porId[rt.id], mod=Number(rt.mod)||0;
+    var datos={ titulo:rt.titulo, vence:rt.vence||"", clave:rt.clave||"", dni:rt.dni||"", nombre:rt.nombre||"",
+                estado:rt.estado==="hecha"?"hecha":"pendiente", creada:rt.creada||"", disp:rt.disp||"", borrada:!!rt.borrada };
+    if(!loc){ S.tareas.push(Object.assign({ id:rt.id, mod:mod, sync:mod }, datos)); return; }
+    if(!loc.disp && rt.disp) loc.disp=rt.disp;
+    if(!sucia(loc) && mod>=(loc.mod||0)){ Object.assign(loc, datos); loc.mod=mod; loc.sync=mod; }
+  });
+  S.tareas.forEach(function(t){ if(!sucia(t) && !remotas[t.id]) t.sync=0; });
+}
+function enviarTareas(){
+  if(SYNC.scriptViejo) return Promise.resolve(false);
+  var sucias=S.tareas.filter(sucia);
+  if(!sucias.length) return Promise.resolve(false);
+  var marca=sucias.map(function(t){ return [t, t.mod]; });
+  return hojaLlamar("tareas_guardar", { tareas: sucias.map(function(t){
+    return { id:t.id, titulo:t.titulo, vence:t.vence, clave:t.clave, dni:t.dni, nombre:t.nombre, estado:t.estado,
+             creada:t.creada, mod:t.mod, borrada:!!t.borrada };
+  }) }).then(function(r){
+    marca.forEach(function(par){ par[0].sync=par[1]; if(!par[0].disp && r && r.dispositivo) par[0].disp=r.dispositivo; });
+    return true;
+  });
+}
 function enviarHistorial(){
   if(SYNC.scriptViejo) return Promise.resolve(false);
   var sucias=S.historial.filter(sucia);
@@ -1924,8 +2071,8 @@ function sincronizar(silencioso){
     return Promise.resolve(false);
   }
   SYNC.trabajando=true; SYNC.error=""; pintarSync();
-  return hojaLlamar("todo").then(function(r){ fusionar(r); fusionarHistorial(r); guardar(); return enviarPendiente(); })
-    .then(enviarHistorial)
+  return hojaLlamar("todo").then(function(r){ fusionar(r); fusionarHistorial(r); fusionarTareas(r); guardar(); return enviarPendiente(); })
+    .then(enviarHistorial).then(enviarTareas)
     .then(function(){
       SYNC.ultimo=Date.now(); S.lista.ultSync=SYNC.ultimo; guardar();
       if(!silencioso) toast("Sincronizado con la hoja de Google.");
@@ -1938,7 +2085,7 @@ function sincronizar(silencioso){
     })
     .then(function(ok){
       SYNC.trabajando=false;
-      pintarLista(); pintarFicha();
+      pintarLista(); pintarFicha(); pintarTareasInicio();
       if(SYNC.repetir){ SYNC.repetir=false; programarSync(); }
       return ok;
     });
@@ -1957,7 +2104,7 @@ function pintarSync(){
     punto.hidden=!conf;
     punto.className="sync-pt "+estado;
     punto.title = SYNC.trabajando ? "Sincronizando…" : SYNC.error ? SYNC.error : n ? n+" cambio"+(n===1?"":"s")+" sin enviar"+
-      (SYNC.scriptViejo && S.historial.filter(sucia).length ? ". El historial se guardará en la hoja cuando el script esté en la versión 5." : "") : "Todo sincronizado";
+      (SYNC.scriptViejo && (S.historial.filter(sucia).length || S.tareas.filter(sucia).length) ? ". El historial y las tareas se guardarán en la hoja cuando el script esté en la versión 5." : "") : "Todo sincronizado";
   }
   var e=document.getElementById("lista-estado");
   if(e){

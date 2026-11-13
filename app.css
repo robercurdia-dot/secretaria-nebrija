@@ -335,6 +335,24 @@ body.fcol-abierta{overflow:hidden}
 .fcol-hist .etq-h{font-weight:600}
 .fcol-hist>div.anulada>div{text-decoration:line-through; color:var(--ink-faint)}
 .fcol-hist>div.anulada small{text-decoration:none}
+#inicio-tareas{margin-top:16px}
+.tareas-cab{display:flex; align-items:center; gap:10px; margin-bottom:10px}
+.tareas-cab h3{margin:0}
+.tarea-nueva{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px}
+.tarea-nueva input[name=titulo]{flex:1 1 200px; min-width:0}
+.tarea-nueva input[name=vence]{flex:0 0 auto; width:auto}
+.tareas{font-size:13.5px}
+.tarea{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--linea)}
+.tarea:last-child{border-bottom:0}
+.tarea label{display:flex; gap:9px; align-items:flex-start; cursor:pointer; min-width:0}
+.tarea label input{margin-top:3px; accent-color:var(--carmin)}
+.tarea label b{font-weight:500; overflow-wrap:anywhere}
+.tarea.hecha label b{text-decoration:line-through; color:var(--ink-faint)}
+.tarea-der{display:flex; gap:6px; align-items:center; flex-shrink:0}
+.nota-in{color:var(--ink-faint); font-size:11.5px}
+button.enlace{background:none; border:0; padding:0; color:var(--carmin); font:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline; text-underline-offset:2px}
+.tareas-hechas{margin-top:10px}
+@media (max-width:700px){ .tarea{flex-wrap:wrap} .tarea-der{margin-left:26px} }
 .mini.aviso-btn{border-color:var(--carmin); color:var(--carmin)}
 @media (max-width:860px){
   #fcol{top:auto; left:0; width:100%; max-height:92vh; border-left:0; border-radius:16px 16px 0 0;

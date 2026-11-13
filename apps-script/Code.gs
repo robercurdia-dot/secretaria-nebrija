@@ -53,7 +53,8 @@ var HOJAS = {
   asistencia: "Asistencia",
   totales: "Totales",
   auto: "Automatización",
-  historial: "Historial"
+  historial: "Historial",
+  tareas: "Tareas"
 };
 var CABECERAS = {
   censo: ["Apellido 1", "Apellido 2", "Nombre", "Teléfono", "Habitación", "DNI", "Email", "Estudios"],
@@ -61,7 +62,8 @@ var CABECERAS = {
   sesiones: ["Id", "Fecha", "CategoríaId", "Categoría", "Título", "Modificado", "Borrada"],
   asistencia: ["SesiónId", "Fecha", "Categoría", "Título", "Clave", "Apellidos", "Nombre", "Habitación", "Estado", "Puntos"],
   auto: ["Id", "Tarea", "Estado", "Creado", "Actualizado", "Mensaje", "Encargo", "Resultado"],
-  historial: ["Id", "Fecha", "Clave", "DNI", "Colegial", "Tipo", "Detalle", "Dispositivo", "Modificado", "Anulada"]
+  historial: ["Id", "Fecha", "Clave", "DNI", "Colegial", "Tipo", "Detalle", "Dispositivo", "Modificado", "Anulada"],
+  tareas: ["Id", "Título", "Vence", "Clave", "DNI", "Colegial", "Estado", "Creada", "Dispositivo", "Modificado", "Borrada"]
 };
 // columnas numéricas (el resto se guarda como texto para que Sheets no convierta fechas ni números)
 var NUMERICAS = {
@@ -69,7 +71,8 @@ var NUMERICAS = {
   sesiones: [6],
   asistencia: [10],
   auto: [4, 5],
-  historial: [9]
+  historial: [9],
+  tareas: [10]
 };
 var ESTADO_TEXTO = { P: "Presente", A: "Ausente", J: "Justificado" };
 var ESTADO_CODIGO = { "Presente": "P", "Ausente": "A", "Justificado": "J" };
@@ -116,6 +119,8 @@ function doPost(e) {
         return todo();
       case "lista_guardar":
         return listaGuardar(pet);
+      case "tareas_guardar":
+        return tareasGuardar(pet, quienEs(props, String(pet.token), clave));
       case "historial_guardar":
         return historialGuardar(pet, quienEs(props, String(pet.token), clave));
       default:
@@ -342,7 +347,40 @@ function todo() {
     return { sid: r[0], clave: r[4], estado: ESTADO_CODIGO[r[8]] || "" };
   }).filter(function (a) { return a.estado; });
   return salida({ ok: true, version: VERSION_SCRIPT, categorias: categorias, sesiones: sesiones, asistencia: asistencia,
-                  historial: historialLeer() });
+                  historial: historialLeer(), tareas: tareasLeer() });
+}
+
+/* ---------------- tareas ---------------- */
+// Recordatorios cortos, con o sin colegial. Gana el cambio más reciente (columna Modificado).
+
+function tareasLeer() {
+  return leerTabla("tareas").map(function (r) {
+    return { id: r[0], titulo: r[1], vence: r[2], clave: r[3], dni: r[4], nombre: r[5], estado: r[6] || "pendiente",
+             creada: r[7], disp: r[8], mod: Number(r[9]) || 0, borrada: !!r[10] };
+  });
+}
+
+function tareasGuardar(pet, dispositivo) {
+  var filas = leerTabla("tareas");
+  var porId = {};
+  filas.forEach(function (r, i) { porId[r[0]] = i; });
+  var n = 0;
+  (pet.tareas || []).forEach(function (t) {
+    var id = String(t.id || "").slice(0, 40);
+    var titulo = String(t.titulo || "").trim().slice(0, 120);
+    if (!id || !titulo) return;
+    var mod = Number(t.mod) || 0;
+    var i = porId[id];
+    if (i !== undefined && (Number(filas[i][9]) || 0) > mod) return; // en la hoja hay un cambio más reciente
+    var vence = /^\d{4}-\d{2}-\d{2}$/.test(String(t.vence || "")) ? t.vence : "";
+    var fila = [id, titulo, vence, String(t.clave || "").slice(0, 120), String(t.dni || "").slice(0, 20),
+                String(t.nombre || "").slice(0, 120), t.estado === "hecha" ? "hecha" : "pendiente",
+                String(t.creada || "").slice(0, 16), i !== undefined ? filas[i][8] : dispositivo, mod, t.borrada ? 1 : ""];
+    if (i !== undefined) filas[i] = fila; else { porId[id] = filas.length; filas.push(fila); }
+    n++;
+  });
+  if (n) escribirTabla("tareas", filas);
+  return salida({ ok: true, guardadas: n, dispositivo: dispositivo });
 }
 
 /* ---------------- historial de cada colegial ---------------- */
