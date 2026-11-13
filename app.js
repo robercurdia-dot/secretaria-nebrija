@@ -47,14 +47,14 @@ function genero(nombre){
 var CLAVE="nebrija-secretaria-v1";
 var CENSO=[];
 function listaVacia(){ return { categorias:[], sesiones:[], actual:null, borradas:[], catBorradas:[], ultSync:0 }; }
-var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[],
+var S={ censo:[], origen:"vacio", puntos:[], puntosLista:false, generoManual:{}, sel:{}, anuario:{}, enviados:{}, salidos:[], clupik:[], historial:[],
         lista:listaVacia(), ajustes:{ campos:{}, sheets:{ url:"", token:"", auto:true } } };
 
 var guardarTimer=null;
 function guardar(){
   try{ localStorage.setItem(CLAVE, JSON.stringify({censo:S.censo, origen:S.origen, puntos:S.puntos, puntosLista:S.puntosLista,
     generoManual:S.generoManual, anuario:S.anuario, enviados:S.enviados, salidos:SORTEO.salidos, clupik:S.clupik,
-    lista:S.lista, ajustes:S.ajustes})); }catch(e){}
+    historial:S.historial, lista:S.lista, ajustes:S.ajustes})); }catch(e){}
 }
 function cargar(){
   try{
@@ -64,6 +64,7 @@ function cargar(){
     if(!d) return false;
     S.censo=d.censo||[]; S.origen=d.origen||(S.censo.length?"fichero":"vacio"); S.puntos=d.puntos||[]; S.puntosLista=!!d.puntosLista;
     S.generoManual=d.generoManual||{}; S.anuario=d.anuario||{}; S.enviados=d.enviados||{}; SORTEO.salidos=d.salidos||[];
+    S.historial=Array.isArray(d.historial) ? d.historial : [];
     S.clupik=(d.clupik||[]).map(function(p){
       if(p.modalidad===undefined) p.modalidad="baloncesto";
       if(p.genero===undefined) p.genero=p.equipo||"M";
@@ -273,7 +274,32 @@ function cambiarHab(p, num){
   var antes=p.hab;
   p.hab=String(num);
   guardar();
+  registrar(p, "habitacion", antes ? "De la "+antes+" a la "+num : "Asignada la "+num);
   return antes;
+}
+
+/* ---------- historial: hechos que se anotan solos (nunca notas libres) ---------- */
+var TIPOS_HIST={ habitacion:"Habitación", certificado:"Certificado", clupik:"Clupik", datos:"Datos", whatsapp:"WhatsApp" };
+function ahoraTexto(){
+  var d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,16).replace("T"," ");
+}
+function registrar(p, tipo, detalle){
+  if(!p || !TIPOS_HIST[tipo]) return;
+  S.historial.push({ id:uid(), fecha:ahoraTexto(), clave:claveP(p), dni:(p.dni||"").trim(), nombre:nombreCompleto(p),
+                     tipo:tipo, detalle:String(detalle||"").slice(0,200), disp:"", anulada:false, mod:Date.now(), sync:0 });
+  guardar(); programarSync(); pintarFicha();
+}
+function historialDe(p){
+  var k=claveP(p), dni=norm(p.dni||"").replace(/\s/g,"");
+  return S.historial.filter(function(e){
+    return e.clave===k || (dni && norm(e.dni||"").replace(/\s/g,"")===dni);
+  }).sort(function(a,b){ return String(b.fecha).localeCompare(String(a.fecha)) || (b.mod-a.mod); });
+}
+function anularHist(id){
+  var e=S.historial.filter(function(x){ return x.id===id; })[0];
+  if(!e || e.anulada) return;
+  e.anulada=true; e.mod=Date.now(); guardar(); programarSync();
 }
 function clupikDe(p){
   var dni=norm(p.dni||"").replace(/\s/g,""), k=claveP(p);
@@ -377,6 +403,14 @@ function pintarFicha(){
       }).join("") : '<p class="nota">No está en la lista de Clupik.</p>')+
      '</section>';
 
+  var hist=historialDe(p);
+  h+='<section class="fcol-sec"><h3>Historial</h3>'+
+     (hist.length ? '<div class="fcol-hist">'+hist.map(function(e){
+        return '<div class="'+(e.anulada?'anulada':'')+'"><div><span class="etq-h">'+esc(TIPOS_HIST[e.tipo]||e.tipo)+'</span> '+esc(e.detalle)+
+               '<small>'+esc(e.fecha)+(e.disp?' · '+esc(e.disp):'')+(e.anulada?' · anulada':'')+(sucia(e)?' · sin enviar':'')+'</small></div>'+
+               (e.anulada ? '' : '<button type="button" class="mini" data-anular="'+esc(e.id)+'">Anular</button>')+'</div>';
+      }).join("")+'</div>' : '<p class="nota">Todavía no hay nada anotado.</p>')+
+     '</section>';
   if(S.enviados[claveP(p)]) h+='<p class="nota">Ya se le escribió por WhatsApp en la tanda actual.</p>';
   caja.innerHTML=h;
 }
@@ -393,6 +427,14 @@ document.getElementById("fcol-fondo").addEventListener("click", function(e){ if(
 document.getElementById("fcol-cerrar").addEventListener("click", cerrarFicha);
 document.addEventListener("keydown", function(e){ if(e.key==="Escape" && FICHA.p) cerrarFicha(); });
 document.getElementById("fcol-cuerpo").addEventListener("click", function(e){
+  var an=e.target.closest("button[data-anular]");
+  if(an){
+    // dos toques: el primero pide confirmación en el propio botón
+    if(an.dataset.seguro!=="1"){ an.dataset.seguro="1"; an.textContent="¿Anular?"; an.classList.add("aviso-btn");
+      setTimeout(function(){ if(an.isConnected){ an.dataset.seguro=""; an.textContent="Anular"; an.classList.remove("aviso-btn"); } }, 4000); return; }
+    anularHist(an.dataset.anular); pintarFicha(); toast("Entrada anulada. Sigue en la hoja, marcada como anulada.");
+    return;
+  }
   var b=e.target.closest("button[data-fcol]"); if(!b || !FICHA.p) return;
   var p=FICHA.p, que=b.dataset.fcol;
   if(que==="wa"){ abrirWhatsApp(p); return; }
@@ -957,7 +999,7 @@ function abrirWhatsApp(p){
   var url="https://wa.me/"+tel+"?text="+encodeURIComponent(mensajePara(p));
   var v=window.open(url, "_blank", "noopener");
   S.enviados[claveP(p)]=true;
-  guardar(); pintarMensajes();
+  guardar(); registrar(p, "whatsapp", "Mensaje por WhatsApp"); pintarMensajes();
   if(!v){
     var a=document.createElement("a");
     a.href=url; a.target="_blank"; a.rel="noopener"; a.textContent="Abrir el chat de "+titulo(p.nom);
@@ -1032,6 +1074,7 @@ function impCertificados(){
   if(!elegidos.length){ toast("Selecciona al menos un colegial."); return; }
   if(!dir){ toast("Escribe primero el nombre de quien firma el certificado."); return; }
   if(!fecha){ toast("Escribe la fecha que irá en el certificado."); return; }
+  elegidos.forEach(function(p){ registrar(p, "certificado", "Certificado de residencia · curso "+curso); });
   var h="";
   elegidos.forEach(function(p){
     var art = generoDe(p)==="F" ? "la colegial" : "el colegial";
@@ -1130,6 +1173,9 @@ var CLUPIK_ESTADOS=[
   ["existente_con","Ya tiene licencia esta temporada"],
   ["confirmada","Confirmada en Clupik ✓"]
 ];
+function registrarClupik(c){
+  registrar(c, "clupik", "Alta confirmada · "+clupikModalidad(c).label+(c.genero==="F"?" femenino":" masculino"));
+}
 function clupikEtiqueta(cod){ var e=CLUPIK_ESTADOS.filter(function(x){ return x[0]===cod; })[0]; return e?e[1]:cod; }
 function clupikRegla(p){
   if(p.estado==="nueva") return "Email: "+clupikEmail()+" · Teléfono en blanco";
@@ -1232,7 +1278,7 @@ document.getElementById("btn-borrar").addEventListener("click", function(){
   if(!confirm("Se borrarán de este dispositivo el censo, la asistencia, los clubes y los ajustes (también la conexión con la hoja). Lo que tengas guardado en tu hoja de Google no se toca. ¿Continuar?")) return;
   try{ localStorage.removeItem(CLAVE); }catch(e){}
   S.censo=[]; S.origen="vacio"; S.puntos=[]; S.puntosLista=false; S.generoManual={}; S.sel={}; S.anuario={}; S.enviados={};
-  S.clupik=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
+  S.clupik=[]; S.historial=[]; SORTEO.salidos=[]; SORTEO.ultimo=null; S.lista=listaVacia();
   S.ajustes={ campos:{}, sheets:{ url:"", token:"", auto:true } };
   restaurarCampos(); pintarCenso(); pintarClupik(); actualizarCartel();
   toast("Datos borrados de este dispositivo.");
@@ -1410,9 +1456,11 @@ document.getElementById("plano-lienzo").addEventListener("dblclick", function(e)
   input.addEventListener("blur", function(){
     var texto=input.value.replace(/\s+/g," ").trim();
     if(!texto){ pintarPlano(); return; }
-    var partes=texto.split(" ");
+    var partes=texto.split(" "), antes=nombreCompleto(p);
     p.nom=partes[0]; p.a1=partes.slice(1).join(" ")||p.a1;
-    guardar(); pintarCenso();
+    guardar();
+    if(nombreCompleto(p)!==antes) registrar(p, "datos", "Nombre: "+antes+" → "+nombreCompleto(p));
+    pintarCenso();
     toast("Nombre actualizado.");
   }, {once:true});
 });
@@ -1498,7 +1546,7 @@ document.getElementById("tabla-anu").addEventListener("click", function(e){
   document.getElementById("msg-lista").addEventListener("click", function(e){
     var b=e.target.closest("[data-wa]"); if(!b) return;
     var p=S.censo[+b.dataset.wa];
-    S.enviados[claveP(p)]=true; guardar();
+    S.enviados[claveP(p)]=true; guardar(); registrar(p, "whatsapp", "Mensaje por WhatsApp");
     setTimeout(pintarMensajes, 400);
   });
   document.getElementById("msg-siguiente").addEventListener("click", function(){
@@ -1617,7 +1665,10 @@ document.getElementById("tabla-anu").addEventListener("click", function(e){
     var tr=t.closest("tr"); if(!tr) return;
     var i=+tr.dataset.i, f=t.dataset.f;
     if(!S.clupik[i]) return;
-    S.clupik[i][f]=t.value; guardar(); pintarClupik();
+    var antesEst=S.clupik[i].estado;
+    S.clupik[i][f]=t.value; guardar();
+    if(f==="estado" && t.value==="confirmada" && antesEst!=="confirmada") registrarClupik(S.clupik[i]);
+    pintarClupik();
   });
   tabla.addEventListener("click", function(e){
     var b=e.target.closest("button[data-accion]"); if(!b) return;
@@ -1675,7 +1726,7 @@ document.getElementById("cert-lista").addEventListener("click", function(e){
    con una hoja de Google (Apps Script)
    ==================================================================== */
 var LT="pasar";                       // pestaña activa de «Pasar lista»
-var SYNC={ trabajando:false, error:"", ultimo:0, timer:null, repetir:false };
+var SYNC={ trabajando:false, error:"", ultimo:0, timer:null, repetir:false, scriptViejo:false };
 var SUGERIDAS=["Actividades culturales","Deportes","Reuniones","Voluntariado","Conferencias"];
 
 function hoyISO(){ var d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
@@ -1708,7 +1759,7 @@ function tocarCat(c){ c.mod=Date.now(); guardar(); programarSync(); }
 function sucia(x){ return (x.mod||0) > (x.sync||0); }
 function pendientesSync(){
   return S.lista.sesiones.filter(sucia).length + S.lista.categorias.filter(sucia).length +
-         S.lista.borradas.length + S.lista.catBorradas.length;
+         S.lista.borradas.length + S.lista.catBorradas.length + S.historial.filter(sucia).length;
 }
 
 /* ---------- conexión con la hoja ---------- */
@@ -1803,6 +1854,39 @@ function fusionar(r){
   L.categorias.forEach(function(c){ if(!sucia(c) && !remotasC[c.id]) c.sync=0; });
 }
 
+function fusionarHistorial(r){
+  // Script anterior a la versión 5: no sabe guardar el historial; lo pendiente espera en el dispositivo
+  SYNC.scriptViejo = !Array.isArray(r.historial);
+  if(SYNC.scriptViejo) return;
+  var porId={}; S.historial.forEach(function(e){ porId[e.id]=e; });
+  var remotas={};
+  r.historial.forEach(function(rh){
+    remotas[rh.id]=true;
+    var loc=porId[rh.id], mod=Number(rh.mod)||0;
+    if(!loc){
+      S.historial.push({ id:rh.id, fecha:rh.fecha, clave:rh.clave, dni:rh.dni||"", nombre:rh.nombre||"", tipo:rh.tipo,
+                         detalle:rh.detalle||"", disp:rh.disp||"", anulada:!!rh.anulada, mod:mod, sync:mod });
+    } else {
+      loc.disp=rh.disp||loc.disp;
+      if(!sucia(loc)){ loc.anulada=!!rh.anulada; loc.mod=Math.max(loc.mod||0,mod); loc.sync=loc.mod; }
+    }
+  });
+  // lo que estaba sincronizado y ya no está en la hoja (hoja vaciada) se vuelve a enviar
+  S.historial.forEach(function(e){ if(!sucia(e) && !remotas[e.id]) e.sync=0; });
+}
+function enviarHistorial(){
+  if(SYNC.scriptViejo) return Promise.resolve(false);
+  var sucias=S.historial.filter(sucia);
+  if(!sucias.length) return Promise.resolve(false);
+  var marca=sucias.map(function(e){ return [e, e.mod]; });
+  return hojaLlamar("historial_guardar", { entradas: sucias.map(function(e){
+    return { id:e.id, fecha:e.fecha, clave:e.clave, dni:e.dni, nombre:e.nombre, tipo:e.tipo, detalle:e.detalle, mod:e.mod, anulada:!!e.anulada };
+  }) }).then(function(r){
+    marca.forEach(function(par){ par[0].sync=par[1]; if(!par[0].disp && r && r.dispositivo) par[0].disp=r.dispositivo; });
+    return true;
+  });
+}
+
 function enviarPendiente(){
   var L=S.lista;
   var sucias=L.sesiones.filter(sucia);
@@ -1840,7 +1924,8 @@ function sincronizar(silencioso){
     return Promise.resolve(false);
   }
   SYNC.trabajando=true; SYNC.error=""; pintarSync();
-  return hojaLlamar("todo").then(function(r){ fusionar(r); guardar(); return enviarPendiente(); })
+  return hojaLlamar("todo").then(function(r){ fusionar(r); fusionarHistorial(r); guardar(); return enviarPendiente(); })
+    .then(enviarHistorial)
     .then(function(){
       SYNC.ultimo=Date.now(); S.lista.ultSync=SYNC.ultimo; guardar();
       if(!silencioso) toast("Sincronizado con la hoja de Google.");
@@ -1853,7 +1938,7 @@ function sincronizar(silencioso){
     })
     .then(function(ok){
       SYNC.trabajando=false;
-      pintarLista();
+      pintarLista(); pintarFicha();
       if(SYNC.repetir){ SYNC.repetir=false; programarSync(); }
       return ok;
     });
@@ -1871,7 +1956,8 @@ function pintarSync(){
   if(punto){
     punto.hidden=!conf;
     punto.className="sync-pt "+estado;
-    punto.title = SYNC.trabajando ? "Sincronizando…" : SYNC.error ? SYNC.error : n ? n+" cambio"+(n===1?"":"s")+" sin enviar" : "Todo sincronizado";
+    punto.title = SYNC.trabajando ? "Sincronizando…" : SYNC.error ? SYNC.error : n ? n+" cambio"+(n===1?"":"s")+" sin enviar"+
+      (SYNC.scriptViejo && S.historial.filter(sucia).length ? ". El historial se guardará en la hoja cuando el script esté en la versión 5." : "") : "Todo sincronizado";
   }
   var e=document.getElementById("lista-estado");
   if(e){
@@ -3080,7 +3166,10 @@ AUTO_APLICAR.clupik=function(t){
     var p=por[r.id]; if(!p) return;
     n++;
     if(r.estado==="error"){ errores++; p.notas="Error automático: "+String(r.notas||"sin detalle").slice(0,160); return; }
-    if(validos.indexOf(r.estado)>=0) p.estado=r.estado;
+    if(validos.indexOf(r.estado)>=0){
+      if(r.estado==="confirmada" && p.estado!=="confirmada") registrarClupik(p);
+      p.estado=r.estado;
+    }
     p.notas = r.notas ? String(r.notas).slice(0,200) : p.notas;
   });
   guardar(); pintarClupik();

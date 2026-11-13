@@ -43,7 +43,7 @@
  *                 recoja el encargo y devuelva el resultado (no da acceso a nada más)
  *   GH_WORKFLOW · (opcional) nombre del flujo; por defecto tarea.yml
  */
-var VERSION_SCRIPT = 4;
+var VERSION_SCRIPT = 5;
 var PIN_INTENTOS = 5;
 
 var HOJAS = {
@@ -52,21 +52,24 @@ var HOJAS = {
   sesiones: "Sesiones",
   asistencia: "Asistencia",
   totales: "Totales",
-  auto: "Automatización"
+  auto: "Automatización",
+  historial: "Historial"
 };
 var CABECERAS = {
   censo: ["Apellido 1", "Apellido 2", "Nombre", "Teléfono", "Habitación", "DNI", "Email", "Estudios"],
   categorias: ["Id", "Nombre", "Puntos", "Modificado", "Borrada"],
   sesiones: ["Id", "Fecha", "CategoríaId", "Categoría", "Título", "Modificado", "Borrada"],
   asistencia: ["SesiónId", "Fecha", "Categoría", "Título", "Clave", "Apellidos", "Nombre", "Habitación", "Estado", "Puntos"],
-  auto: ["Id", "Tarea", "Estado", "Creado", "Actualizado", "Mensaje", "Encargo", "Resultado"]
+  auto: ["Id", "Tarea", "Estado", "Creado", "Actualizado", "Mensaje", "Encargo", "Resultado"],
+  historial: ["Id", "Fecha", "Clave", "DNI", "Colegial", "Tipo", "Detalle", "Dispositivo", "Modificado", "Anulada"]
 };
 // columnas numéricas (el resto se guarda como texto para que Sheets no convierta fechas ni números)
 var NUMERICAS = {
   categorias: [3, 4],
   sesiones: [6],
   asistencia: [10],
-  auto: [4, 5]
+  auto: [4, 5],
+  historial: [9]
 };
 var ESTADO_TEXTO = { P: "Presente", A: "Ausente", J: "Justificado" };
 var ESTADO_CODIGO = { "Presente": "P", "Ausente": "A", "Justificado": "J" };
@@ -113,6 +116,8 @@ function doPost(e) {
         return todo();
       case "lista_guardar":
         return listaGuardar(pet);
+      case "historial_guardar":
+        return historialGuardar(pet, quienEs(props, String(pet.token), clave));
       default:
         if (String(pet.accion).indexOf("auto_") === 0) return autoAccion(pet);
         if (String(pet.accion).indexOf("drive_") === 0) {
@@ -336,7 +341,53 @@ function todo() {
   var asistencia = leerTabla("asistencia").map(function (r) {
     return { sid: r[0], clave: r[4], estado: ESTADO_CODIGO[r[8]] || "" };
   }).filter(function (a) { return a.estado; });
-  return salida({ ok: true, categorias: categorias, sesiones: sesiones, asistencia: asistencia });
+  return salida({ ok: true, version: VERSION_SCRIPT, categorias: categorias, sesiones: sesiones, asistencia: asistencia,
+                  historial: historialLeer() });
+}
+
+/* ---------------- historial de cada colegial ---------------- */
+// Solo se anotan hechos (cambio de habitación, certificado, alta en Clupik…), nunca notas libres.
+// Las entradas no se borran: se marcan como anuladas.
+
+var HISTORIAL_TIPOS = ["habitacion", "certificado", "clupik", "datos", "whatsapp"];
+
+function historialLeer() {
+  return leerTabla("historial").map(function (r) {
+    return { id: r[0], fecha: r[1], clave: r[2], dni: r[3], nombre: r[4], tipo: r[5], detalle: r[6],
+             disp: r[7], mod: Number(r[8]) || 0, anulada: !!r[9] };
+  });
+}
+
+function quienEs(props, token, clave) {
+  if (clave && token === String(clave)) return "Clave principal";
+  var d = leerJson(props, "DISPOSITIVOS")[huella(token)];
+  return d ? d.nombre : "Desconocido";
+}
+
+function historialGuardar(pet, dispositivo) {
+  var filas = leerTabla("historial");
+  var porId = {};
+  filas.forEach(function (r, i) { porId[r[0]] = i; });
+  var n = 0;
+  (pet.entradas || []).forEach(function (e) {
+    var id = String(e.id || "").slice(0, 40);
+    if (!id || HISTORIAL_TIPOS.indexOf(e.tipo) < 0) return;
+    var mod = Number(e.mod) || 0;
+    if (porId[id] !== undefined) {
+      // de una entrada ya guardada solo puede cambiar si está anulada
+      var f = filas[porId[id]];
+      f[8] = Math.max(Number(f[8]) || 0, mod);
+      f[9] = e.anulada ? 1 : "";
+    } else {
+      porId[id] = filas.length;
+      filas.push([id, String(e.fecha || "").slice(0, 16), String(e.clave || "").slice(0, 120), String(e.dni || "").slice(0, 20),
+                  String(e.nombre || "").slice(0, 120), e.tipo, String(e.detalle || "").slice(0, 200), dispositivo, mod,
+                  e.anulada ? 1 : ""]);
+    }
+    n++;
+  });
+  if (n) escribirTabla("historial", filas);
+  return salida({ ok: true, guardadas: n, dispositivo: dispositivo });
 }
 
 function listaGuardar(pet) {
